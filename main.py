@@ -6,7 +6,7 @@ from aiogram.filters.command import Command
 # Вставь сюда свой токен (в кавычках)
 # В реальных крупных проектах токен хранят в отдельном файле .env,
 # но для начала можно и так. НО НЕ ПОКАЗЫВАЙ ЭТОТ КОД НИКОМУ!
-API_TOKEN = "ТВОЙ_ТОКЕН_ОТ_BOTFATHER"
+API_TOKEN = "8097357843:AAEkhMnfooj4BzStyOgA-fa2bj07bcZ-LhQ"
 
 # Включаем логирование, чтобы видеть сообщения в консоли
 logging.basicConfig(level=logging.INFO)
