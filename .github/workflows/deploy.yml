@@ -33,7 +33,7 @@ jobs:
         with:
           # Мы указываем путь именно к папке.
           # Плагин сам зайдет внутрь и заберет index.html
-          path: '.frontend/'
+          path: './frontend'
 
       - name: Публикация
         id: deployment
