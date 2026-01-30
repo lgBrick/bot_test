@@ -55,17 +55,17 @@ function renderGames(filterText = "") {
 // 2. Функция открытия игры
 function openGame(game) {
     mainScreen.style.display = "none";
-    gameScreen.style.display = "block"; // Поменяли flex на block для корректного iframe
+    gameScreen.style.display = "block";
 
     tg.BackButton.show();
     document.getElementById("game-title-display").innerText = game.title;
 
     if (game.url) {
-        // Добавляем атрибуты для лучшей работы на мобильных
+        // Добавляем ?v= и текущее время, чтобы ссылка всегда была уникальной
+        const cacheBuster = `?v=${Date.now()}`;
         gameContent.innerHTML = `
-            <iframe src="${game.url}"
-                    style="width: 100%; height: 85vh; border: none;"
-                    allow="accelerometer; gyroscope; payment">
+            <iframe src="${game.url}${cacheBuster}"
+                    style="width: 100%; height: 85vh; border: none;">
             </iframe>`;
     }
 }
