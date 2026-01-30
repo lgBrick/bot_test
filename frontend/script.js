@@ -18,10 +18,10 @@ const games = [
     },
     {
         id: 3,
-        title: "Tower Blocks",
-        icon: "https://cdn-icons-png.flaticon.com/512/3655/3655682.png",
-        url: "games/tower/index.html"
-    }
+        title: "Minesweeper",
+        icon: "https://img.icons8.com/emoji/48/bomb-emoji.png",
+        url: "games/minesweeper/index.html"
+}
 ];
 
 const gamesContainer = document.getElementById("games-container");
