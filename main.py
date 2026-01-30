@@ -1,36 +1,38 @@
 import asyncio
 import logging
+import os  # Импортируем модуль работы с системой
+from dotenv import load_dotenv # Импортируем загрузчик
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters.command import Command
+from aiogram.types import WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton
 
-# pip install -r requirements.txt
+# 1. Загружаем переменные из файла .env в память
+load_dotenv()
 
-# Вставь сюда свой токен (в кавычках)
-# В реальных крупных проектах токен хранят в отдельном файле .env,
-# но для начала можно и так. НО НЕ ПОКАЗЫВАЙ ЭТОТ КОД НИКОМУ!
-API_TOKEN = "8097357843:AAEkhMnfooj4BzStyOgA-fa2bj07bcZ-LhQ"
+# 2. Достаем токен (если файла нет или токена нет, будет ошибка, и это хорошо)
+API_TOKEN = os.getenv("BOT_TOKEN")
 
-# Включаем логирование, чтобы видеть сообщения в консоли
+# ВСТАВЬ СЮДА ССЫЛКУ, КОТОРУЮ ДАЛ GITHUB
+WEB_APP_URL = "https://твой-ник.github.io/твой-проект/"
+
 logging.basicConfig(level=logging.INFO)
-
-# Объект бота и диспетчера
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
-# Хэндлер на команду /start
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    await message.answer("Привет! Я твой бот. Как дела?")
+    # Создаем кнопку, которая открывает Mini App
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎮 Играть", web_app=WebAppInfo(url=WEB_APP_URL))]
+    ])
 
-# Хэндлер на любые текстовые сообщения (эхо-бот)
-@dp.message()
-async def echo_handler(message: types.Message):
-    await message.answer(f"Ты написал: {message.text}")
+    await message.answer("Привет! Нажми кнопку, чтобы открыть список игр:", reply_markup=kb)
 
-# Запуск процесса поллинга (прослушивания серверов Telegram)
+
 async def main():
     await dp.start_polling(bot)
 
+
 if __name__ == "__main__":
     asyncio.run(main())
-#я дэбил
