@@ -1,44 +1,38 @@
 name: Deploy Mini App to Pages
 
 on:
-  # Робот просыпается, когда мы делаем Push в ветку main
   push:
     branches: ["main"]
-
-  # Позволяет запустить робота вручную кнопку с сайта
   workflow_dispatch:
 
-# Права доступа для робота
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Только один робот может работать одновременно
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  # Задача: публикация
   deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Скачиваем код репозитория
+      - name: Скачиваем код
         uses: actions/checkout@v4
 
       - name: Настраиваем Pages
         uses: actions/configure-pages@v5
 
-      - name: Загружаем файлы из папки frontend
+      - name: Загружаем файлы сайта
         uses: actions/upload-pages-artifact@v3
         with:
-          # ВАЖНО: Укажи здесь имя своей папки с сайтом!
+          # Мы говорим: "Возьми содержимое папки frontend и сделай его главной страницей"
           path: './frontend'
 
-      - name: Публикуем сайт
+      - name: Публикация
         id: deployment
         uses: actions/deploy-pages@v4
