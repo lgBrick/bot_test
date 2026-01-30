@@ -30,7 +30,6 @@ jobs:
       - name: Загружаем файлы сайта
         uses: actions/upload-pages-artifact@v3
         with:
-          # Мы говорим: "Возьми содержимое папки frontend и сделай его главной страницей"
           path: './frontend'
 
       - name: Публикация
