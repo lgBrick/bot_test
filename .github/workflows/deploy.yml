@@ -27,13 +27,18 @@ jobs:
       - name: Настраиваем Pages
         uses: actions/configure-pages@v5
 
-      # МАГИЯ: Загружаем ТОЛЬКО содержимое папки frontend
+      # НОВЫЙ ШАГ: Подготовка артефакта
+      # Мы копируем содержимое frontend в корень временной папки сборки
+      - name: Подготовка файлов
+        run: |
+          mkdir _site
+          cp -r frontend/* _site/
+
       - name: Загружаем файлы сайта
         uses: actions/upload-pages-artifact@v3
         with:
-          # Мы указываем путь именно к папке.
-          # Плагин сам зайдет внутрь и заберет index.html
-          path: ./frontend/
+          # Загружаем содержимое созданной папки _site
+          path: '_site'
 
       - name: Публикация
         id: deployment
