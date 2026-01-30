@@ -24,20 +24,14 @@ jobs:
       - name: Скачиваем код
         uses: actions/checkout@v4
 
-      # --- ВОТ ЭТОТ БЛОК РЕШАЕТ ПРОБЛЕМУ ---
-      - name: Перемещаем файлы сайта в корень
-        run: |
-          cp -r frontend/* . 
-          rm -rf frontend
-      # -------------------------------------
-
       - name: Настраиваем Pages
         uses: actions/configure-pages@v5
 
       - name: Загружаем файлы сайта
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.' # Теперь берем из корня, так как мы их туда переместили
+          # Мы говорим: "Возьми содержимое папки frontend и сделай его главной страницей"
+          path: './frontend'
 
       - name: Публикация
         id: deployment
