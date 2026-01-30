@@ -4,10 +4,24 @@ tg.expand(); // Раскрыть на весь экран
 // Список игр (это наша база данных)
 // url может быть ссылкой на другую страницу или iframe
 const games = [
-    { id: 1, title: "Кликер Монет", icon: "https://cdn-icons-png.flaticon.com/512/1685/1685956.png", type: "clicker" },
-    { id: 2, title: "Космо-гонки", icon: "https://cdn-icons-png.flaticon.com/512/3063/3063778.png", type: "race" },
-    { id: 3, title: "2048", icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png", url: "https://play2048.co/" },
-    { id: 4, title: "Динозаврик", icon: "https://cdn-icons-png.flaticon.com/512/7070/7070498.png", type: "dino" }
+    {
+        id: 1,
+        title: "2048",
+        icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
+        url: "games/2048/index.html"
+    },
+    {
+        id: 2,
+        title: "Hextris",
+        icon: "https://hextris.io/images/touch-icon-iphone-retina.png",
+        url: "games/hextris/index.html"
+    },
+    {
+        id: 3,
+        title: "Tower Blocks",
+        icon: "https://cdn-icons-png.flaticon.com/512/3655/3655682.png",
+        url: "games/tower/index.html"
+    }
 ];
 
 const gamesContainer = document.getElementById("games-container");
@@ -41,20 +55,18 @@ function renderGames(filterText = "") {
 // 2. Функция открытия игры
 function openGame(game) {
     mainScreen.style.display = "none";
-    gameScreen.style.display = "flex";
+    gameScreen.style.display = "block"; // Поменяли flex на block для корректного iframe
 
-    // Показываем кнопку "Назад" в интерфейсе Телеграма
     tg.BackButton.show();
-
     document.getElementById("game-title-display").innerText = game.title;
 
-    // ЛОГИКА ЗАПУСКА ИГРЫ
     if (game.url) {
-        // Если это внешняя ссылка (например 2048), открываем в iframe
-        gameContent.innerHTML = `<iframe src="${game.url}" width="100%" height="500px" style="border:none;"></iframe>`;
-    } else {
-        // Если игры нет, просто заглушка
-        gameContent.innerHTML = `<p>Тут должна быть игра "${game.title}".<br>Пока это просто демо.</p>`;
+        // Добавляем атрибуты для лучшей работы на мобильных
+        gameContent.innerHTML = `
+            <iframe src="${game.url}"
+                    style="width: 100%; height: 85vh; border: none;"
+                    allow="accelerometer; gyroscope; payment">
+            </iframe>`;
     }
 }
 

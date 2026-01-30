@@ -75,3 +75,15 @@ body {
     align-items: center;
     justify-content: center;
 }
+
+#game-content {
+    width: 100%;
+    height: calc(100vh - 60px); /* Вычитаем высоту заголовка */
+    overflow: hidden;
+}
+
+#game-content iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
