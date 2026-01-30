@@ -96,7 +96,7 @@ function showText(text) {
         'pausedMobile': "<div class='centeredHeader unselectable'>Paused</div><br><div class='unselectable centeredSubHeader'>Press <i class='fa fa-play'></i> to resume</div><div style='height:100px;line-height:100px;cursor:pointer;'></div>",
         'start': "<div class='centeredHeader unselectable' style='line-height:80px;'>Press enter to start</div>",
         'gameover': "<div class='centeredHeader unselectable'> Game Over: " + score + " pts</div><br><div style='font-size:24px;' class='centeredHeader unselectable'> High Scores:</div><table class='tg' style='margin:0px auto'> "
-         
+
     };
 
     if (text == 'paused') {
