@@ -3,6 +3,8 @@ import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters.command import Command
 
+# pip install -r requirements.txt
+
 # Вставь сюда свой токен (в кавычках)
 # В реальных крупных проектах токен хранят в отдельном файле .env,
 # но для начала можно и так. НО НЕ ПОКАЗЫВАЙ ЭТОТ КОД НИКОМУ!

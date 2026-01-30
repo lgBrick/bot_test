@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Game Launcher</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Подключаем скрипт Telegram WebApp -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+
+    <!-- Экран выбора игр -->
+    <div id="main-screen">
+        <!-- Поиск -->
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Поиск игры...">
+        </div>
+
+        <!-- Сетка игр -->
+        <div class="games-grid" id="games-container">
+            <!-- Сюда JavaScript добавит игры -->
+        </div>
+    </div>
+
+    <!-- Экран запущенной игры -->
+    <div id="game-screen" style="display: none;">
+        <h2 id="game-title-display">Название игры</h2>
+        <div id="game-content">
+            <!-- Сюда будет вставляться сама игра -->
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
