@@ -13,7 +13,7 @@ load_dotenv()
 API_TOKEN = os.getenv("BOT_TOKEN")
 
 # ВСТАВЬ СЮДА ССЫЛКУ, КОТОРУЮ ДАЛ GITHUB
-WEB_APP_URL = "https://твой-ник.github.io/твой-проект/"
+WEB_APP_URL = "https://lgbrick.github.io/bot_test/"
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
