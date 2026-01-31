@@ -2,9 +2,9 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-// === КЛАСС ХРАНЕНИЯ (без изменений) ===
+// === ХРАНЕНИЕ (CloudStorage) ===
 const Storage = {
-    KEY: '2048_best_score',
+    KEY: '2048_best_score_v2',
     async getBestScore() {
         return new Promise((resolve) => {
             try {
@@ -21,44 +21,24 @@ const Storage = {
     }
 };
 
-// === ВСПОМОГАТЕЛЬНЫЙ КЛАСС: ПЛИТКА ===
-class Tile {
-    constructor(r, c, value) {
-        this.r = r;
-        this.c = c;
-        this.value = value;
-        this.previousPosition = null;
-        this.mergedFrom = null; // Какие плитки создали эту (для анимации)
-        this.id = Tile.idCounter++; // Уникальный ID для DOM элемента
-    }
-
-    savePosition() {
-        this.previousPosition = { r: this.r, c: this.c };
-    }
-
-    updatePosition(r, c) {
-        this.r = r;
-        this.c = c;
-    }
-}
-Tile.idCounter = 0;
-
-// === ГЛАВНЫЙ КЛАСС ИГРЫ ===
+// === ИГРА ===
 class Game2048 {
     constructor() {
         this.gridSize = 4;
         this.score = 0;
         this.bestScore = 0;
 
-        // Массив, в котором хранятся объекты Tile или null
+        // Сетка 4x4, хранит объекты { value, id, merged } или null
         this.grid = [];
+        this.tileIdCounter = 0;
 
+        // DOM
         this.tileContainer = document.getElementById('tile-container');
         this.scoreEl = document.getElementById('score');
         this.bestScoreEl = document.getElementById('best-score');
         this.gameOverScreen = document.getElementById('game-over-screen');
 
-        // Размеры для расчета позиций (вычисляем один раз)
+        // Размеры
         const containerWidth = document.getElementById('game-container').clientWidth;
         this.gap = 10;
         this.cellSize = (containerWidth - 5 * this.gap) / 4;
@@ -79,165 +59,184 @@ class Game2048 {
         this.restart();
     }
 
-    // === ЛОГИКА ИГРЫ ===
-
     restart() {
         this.grid = Array(this.gridSize).fill().map(() => Array(this.gridSize).fill(null));
         this.score = 0;
         this.updateScore(0);
         this.gameOverScreen.style.display = 'none';
-        this.tileContainer.innerHTML = ''; // Чистим DOM
-        Tile.idCounter = 0;
+        this.tileContainer.innerHTML = '';
+        this.tileIdCounter = 0;
 
         this.addRandomTile();
         this.addRandomTile();
-        this.actuate(); // Отрисовка
+        this.draw();
     }
 
+    // --- ЛОГИКА ---
     addRandomTile() {
-        const cells = [];
-        for(let r=0; r<this.gridSize; r++)
-            for(let c=0; c<this.gridSize; c++)
-                if(!this.grid[r][c]) cells.push({r,c});
+        const empty = [];
+        for(let r=0; r<4; r++)
+            for(let c=0; c<4; c++)
+                if(!this.grid[r][c]) empty.push({r,c});
 
-        if (cells.length > 0) {
-            const {r, c} = cells[Math.floor(Math.random() * cells.length)];
-            const tile = new Tile(r, c, Math.random() < 0.9 ? 2 : 4);
-            this.grid[r][c] = tile;
+        if (empty.length > 0) {
+            const {r, c} = empty[Math.floor(Math.random() * empty.length)];
+            this.grid[r][c] = {
+                value: Math.random() < 0.9 ? 2 : 4,
+                id: this.tileIdCounter++,
+                isNew: true, // Флаг для анимации появления
+                merged: false
+            };
         }
     }
 
-    // --- ОТРИСОВКА (СИНХРОНИЗАЦИЯ DOM) ---
-    actuate() {
-        // Проходимся по всем плиткам и рисуем их
+    // --- ОТРИСОВКА ---
+    draw() {
         window.requestAnimationFrame(() => {
-            const existingIds = new Set();
+            const tilesInGrid = new Set();
 
-            for (let r = 0; r < this.gridSize; r++) {
-                for (let c = 0; c < this.gridSize; c++) {
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
                     const tile = this.grid[r][c];
                     if (tile) {
-                        this.addOrUpdateTile(tile);
-                        existingIds.add(tile.id);
-
-                        // Если плитка возникла из слияния, нужно отрисовать "родителей", чтобы они доехали и исчезли
-                        if (tile.mergedFrom) {
-                            tile.mergedFrom.forEach(merged => {
-                                this.addOrUpdateTile(merged);
-                                existingIds.add(merged.id);
-                            });
-                        }
+                        tilesInGrid.add(tile.id);
+                        this.drawTile(tile, r, c);
+                        tile.isNew = false; // Сбрасываем флаг новизны
+                        tile.merged = false;
                     }
                 }
             }
 
-            // Удаляем из DOM плитки, которых больше нет в сетке
-            const domTiles = this.tileContainer.querySelectorAll('.tile');
-            domTiles.forEach(dom => {
-                const id = parseInt(dom.dataset.id);
-                if (!existingIds.has(id)) {
-                    dom.remove();
+            // Удаляем "мертвые" плитки из DOM
+            const domTiles = document.querySelectorAll('.tile');
+            domTiles.forEach(el => {
+                if (!tilesInGrid.has(parseInt(el.dataset.id))) {
+                    el.remove();
                 }
             });
         });
     }
 
-    addOrUpdateTile(tile) {
+    drawTile(tile, r, c) {
         let el = document.querySelector(`.tile[data-id="${tile.id}"]`);
-
-        // Позиция в пикселях
-        const pxX = this.gap + tile.c * (this.cellSize + this.gap);
-        const pxY = this.gap + tile.r * (this.cellSize + this.gap);
+        const x = this.gap + c * (this.cellSize + this.gap);
+        const y = this.gap + r * (this.cellSize + this.gap);
+        const transform = `translate(${x}px, ${y}px)`;
 
         // Если элемента нет - создаем
         if (!el) {
             el = document.createElement('div');
-            el.classList.add('tile', `tile-${tile.value}`);
             el.dataset.id = tile.id;
+            el.className = `tile tile-${tile.value}`;
             el.innerText = tile.value;
-            // Начальная позиция
-            el.style.transform = `translate(${pxX}px, ${pxY}px)`;
+            // СРАЗУ ставим позицию, чтобы не летел из 0,0
+            el.style.transform = transform;
 
-            // Если это новая плитка (не результат слияния и не старая), добавляем анимацию появления
-            if (!tile.mergedFrom && !tile.previousPosition) {
-                el.classList.add('tile-new');
-            }
+            if (tile.isNew) el.classList.add('tile-new');
 
             this.tileContainer.appendChild(el);
         } else {
-            // Если есть - обновляем позицию и класс
-            // Мы используем requestAnimationFrame для плавности, но CSS transition сделает всю работу
-            el.style.transform = `translate(${pxX}px, ${pxY}px)`;
-
-            // Обновляем число и цвет (если изменились)
+            // Обновляем существующий
+            el.style.transform = transform;
             el.className = `tile tile-${tile.value}`;
+            el.innerText = tile.value;
 
-            // Если это результат слияния
-            if (tile.mergedFrom) {
+            if (tile.merged) {
                 el.classList.add('tile-merged');
-                // Удаляем родителей из DOM после завершения анимации
-                setTimeout(() => {
-                   tile.mergedFrom = null;
-                   // При следующем actuate родители удалятся, так как ссылка на них пропадет
-                   this.actuate();
-                }, 200);
             }
         }
     }
 
-    // --- ДВИЖЕНИЕ ---
-    move(direction) {
-        // Векторы направлений
+    // --- ДВИЖЕНИЕ (ЯДРО) ---
+    move(dir) {
+        // 0:Up, 1:Right, 2:Down, 3:Left
         const vectors = {
             'ArrowUp': {x: 0, y: -1},
             'ArrowDown': {x: 0, y: 1},
             'ArrowLeft': {x: -1, y: 0},
             'ArrowRight': {x: 1, y: 0}
         };
-        const vector = vectors[direction];
-        if (!vector) return;
-
-        // Подготовка к движению
-        this.prepareTiles();
+        const vector = vectors[dir];
+        if(!vector) return;
 
         let moved = false;
 
-        // Порядок обхода ячеек важен!
-        // Если двигаем вправо, начинаем справа. Если вниз - снизу.
-        const rows = []; const cols = [];
-        for(let i=0; i<this.gridSize; i++) { rows.push(i); cols.push(i); }
+        // Порядок обхода ячеек
+        const rows = [0,1,2,3];
+        const cols = [0,1,2,3];
+        if (vector.x === 1) cols.reverse(); // Вправо: начинаем справа
+        if (vector.y === 1) rows.reverse(); // Вниз: начинаем снизу
 
-        if (vector.x === 1) cols.reverse();
-        if (vector.y === 1) rows.reverse();
+        // Сброс флагов слияния перед ходом
+        this.grid.forEach(row => row.forEach(t => { if(t) t.merged = false; }));
 
-        // Логика сдвига
         rows.forEach(r => {
             cols.forEach(c => {
                 const tile = this.grid[r][c];
                 if (tile) {
-                    const positions = this.findFarthestPosition(r, c, vector);
-                    const next = this.grid[positions.next.r][positions.next.c];
+                    let nextR = r;
+                    let nextC = c;
 
-                    if (next && next.value === tile.value && !next.mergedFrom) {
-                        // СЛИЯНИЕ
-                        const merged = new Tile(positions.next.r, positions.next.c, tile.value * 2);
-                        merged.mergedFrom = [tile, next];
+                    // Ищем самую дальнюю свободную позицию
+                    while (true) {
+                        const checkR = nextR + vector.y;
+                        const checkC = nextC + vector.x;
 
-                        this.grid[r][c] = null;
-                        this.grid[positions.next.r][positions.next.c] = merged;
+                        if (checkR < 0 || checkR > 3 || checkC < 0 || checkC > 3) break;
 
-                        // Обновляем координаты старых плиток, чтобы они "доехали" до точки слияния
-                        tile.updatePosition(positions.next.r, positions.next.c);
+                        const nextTile = this.grid[checkR][checkC];
 
-                        this.score += merged.value;
-                        moved = true;
-                    } else {
-                        // ПРОСТО СДВИГ
-                        this.grid[r][c] = null;
-                        this.grid[positions.farthest.r][positions.farthest.c] = tile;
-                        tile.updatePosition(positions.farthest.r, positions.farthest.c);
+                        if (!nextTile) {
+                            // Пусто - двигаем дальше
+                            nextR = checkR;
+                            nextC = checkC;
+                        } else if (nextTile.value === tile.value && !nextTile.merged) {
+                            // Слияние!
+                            const newValue = tile.value * 2;
+                            this.score += newValue;
 
-                        if (r !== positions.farthest.r || c !== positions.farthest.c) moved = true;
+                            // Удаляем старую плитку (визуально она "вкатится" в новую)
+                            this.grid[r][c] = null;
+
+                            // Обновляем плитку, в которую вкатились
+                            nextTile.value = newValue;
+                            nextTile.merged = true; // Блокируем повторное слияние за ход
+
+                            // Хак для красивой анимации:
+                            // На самом деле tile (текущий) должен исчезнуть, а nextTile обновиться.
+                            // Но мы просто удалим текущий и обновим целевой.
+                            // В профессиональной версии делают сложнее, но для Mini App этого достаточно.
+
+                            moved = true;
+                            break; // Дальше не идем
+                        } else {
+                            // Уперлись в другую плитку
+                            break;
+                        }
+                    }
+
+                    // Если просто сдвиг (без слияния)
+                    if ((nextR !== r || nextC !== c) && !this.grid[r][c] === null) {
+                         // тут логика если слияния не было выше
+                    }
+
+                    // Упрощенная логика сдвига (чтобы избежать дублей)
+                    // Если позиция изменилась и мы еще не обработали слияние (tile еще в сетке)
+                    if ((nextR !== r || nextC !== c) && this.grid[r][c]) {
+                        const target = this.grid[nextR][nextC];
+                        if (!target) {
+                            // Перенос в пустую
+                            this.grid[nextR][nextC] = tile;
+                            this.grid[r][c] = null;
+                            moved = true;
+                        } else if (target.value === tile.value && !target.merged) {
+                            // Слияние (повтор логики выше для надежности)
+                            target.value *= 2;
+                            target.merged = true;
+                            this.score += target.value;
+                            this.grid[r][c] = null;
+                            moved = true;
+                        }
                     }
                 }
             });
@@ -246,48 +245,17 @@ class Game2048 {
         if (moved) {
             this.updateScore(this.score);
             this.addRandomTile();
-            this.actuate(); // Запускаем анимацию
-
+            this.draw();
             if (this.isGameOver()) {
-                setTimeout(() => this.gameOverScreen.style.display = 'flex', 400);
+                setTimeout(() => this.gameOverScreen.style.display = 'flex', 500);
             }
         }
     }
 
-    prepareTiles() {
-        for(let r=0; r<this.gridSize; r++) {
-            for(let c=0; c<this.gridSize; c++) {
-                if (this.grid[r][c]) {
-                    this.grid[r][c].mergedFrom = null;
-                    this.grid[r][c].savePosition();
-                }
-            }
-        }
-    }
-
-    findFarthestPosition(r, c, vector) {
-        let prev;
-        // Двигаемся в направлении вектора, пока в пределах поля и ячейка пуста
-        do {
-            prev = {r, c};
-            r += vector.y;
-            c += vector.x;
-        } while (
-            r >= 0 && r < this.gridSize &&
-            c >= 0 && c < this.gridSize &&
-            this.grid[r][c] === null
-        );
-
-        return {
-            farthest: prev,
-            next: {r, c} // Это ячейка, в которую мы врезались (или вышли за край)
-        };
-    }
-
-    updateScore(score) {
-        this.score = score;
+    updateScore(s) {
+        this.score = s;
         this.scoreEl.innerText = this.score;
-        if (this.score > this.bestScore) {
+        if(this.score > this.bestScore) {
             this.bestScore = this.score;
             this.bestScoreEl.innerText = this.bestScore;
             Storage.setBestScore(this.bestScore);
@@ -299,39 +267,38 @@ class Game2048 {
             for(let c=0; c<4; c++)
                 if(!this.grid[r][c]) return false;
 
-        for(let r=0; r<4; r++) {
+        for(let r=0; r<4; r++)
             for(let c=0; c<4; c++) {
-                const tile = this.grid[r][c];
-                if (c<3 && tile.value === this.grid[r][c+1].value) return false;
-                if (r<3 && tile.value === this.grid[r+1][c].value) return false;
+                const val = this.grid[r][c].value;
+                if (c<3 && this.grid[r][c+1].value === val) return false;
+                if (r<3 && this.grid[r+1][c].value === val) return false;
             }
-        }
         return true;
     }
 
     // --- УПРАВЛЕНИЕ ---
     setupInput() {
-        document.addEventListener('keydown', (e) => {
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        window.addEventListener('keydown', (e) => {
+            if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
                 e.preventDefault();
                 this.move(e.key);
             }
         });
 
-        const container = document.getElementById('game-container');
-        container.addEventListener('touchstart', (e) => {
+        const c = document.getElementById('game-container');
+        c.addEventListener('touchstart', e => {
             this.touchStartX = e.touches[0].clientX;
             this.touchStartY = e.touches[0].clientY;
         }, {passive: false});
 
-        container.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false});
+        c.addEventListener('touchmove', e => e.preventDefault(), {passive: false});
 
-        container.addEventListener('touchend', (e) => {
+        c.addEventListener('touchend', e => {
             const dx = e.changedTouches[0].clientX - this.touchStartX;
             const dy = e.changedTouches[0].clientY - this.touchStartY;
-            if (Math.max(Math.abs(dx), Math.abs(dy)) > 30) {
-                if (Math.abs(dx) > Math.abs(dy)) this.move(dx > 0 ? 'ArrowRight' : 'ArrowLeft');
-                else this.move(dy > 0 ? 'ArrowDown' : 'ArrowUp');
+            if(Math.abs(dx) > 30 || Math.abs(dy) > 30) {
+                if(Math.abs(dx) > Math.abs(dy)) this.move(dx>0 ? 'ArrowRight' : 'ArrowLeft');
+                else this.move(dy>0 ? 'ArrowDown' : 'ArrowUp');
             }
         }, {passive: false});
     }
