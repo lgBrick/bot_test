@@ -82,7 +82,6 @@ class Tile {
 }
 
 // === ИГРОВОЙ ДВИЖОК ===
-// === ИГРОВОЙ ДВИЖОК ===
 class Game2048 {
     constructor() {
         this.gridSize = 4;

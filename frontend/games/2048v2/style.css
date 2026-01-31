@@ -150,7 +150,6 @@ body {
 .tile-2048 .tile-inner { background: #0b4094; color: #fff; font-size: 18px; box-shadow: 0 0 10px #0b4094; }
 .tile-super .tile-inner { background: #000000; color: #fff; font-size: 14px; }
 
-/* Game Over */
 /* --- Game Over (Изменено) --- */
 .game-over {
     position: absolute;
@@ -182,7 +181,7 @@ body {
     font-size: 30px;
     font-weight: bold;
     margin-bottom: 20px;
-    color: #ffffff;
+    color: var(--text-color);
     text-align: center;
     line-height: 1.5;
 }
