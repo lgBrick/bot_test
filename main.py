@@ -6,12 +6,12 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters.command import Command
 from aiogram.types import WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton
 
-# Загрузка переменных
+# Загружаем переменные окружения
 load_dotenv()
 API_TOKEN = os.getenv("BOT_TOKEN")
-WEB_APP_URL = "https://lgbrick.github.io/bot_test/"
+WEB_APP_URL = "https://lgbrick.github.io/bot_test/"  # Твоя ссылка
 
-# Логирование (лучше ставить INFO, чтобы видеть запуск)
+# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
 # Инициализация
@@ -19,21 +19,27 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 
+# Обработчик команды /start
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎮 Играть", web_app=WebAppInfo(url=WEB_APP_URL))]
     ])
-    await message.answer("Привет! Жми кнопку ниже, чтобы запустить игры:", reply_markup=kb)
+
+    await message.answer(
+        "Привет! Нажми на кнопку ниже, чтобы открыть список игр:",
+        reply_markup=kb
+    )
 
 
+# Главная функция запуска
 async def main():
-    # === ИСПРАВЛЕНИЕ СПАМА ===
-    # Эта строчка удаляет все сообщения, накопившиеся пока бот спал
-    print("Бот запущен. Старые сообщения игнорируются.")
+    print("Бот запускается...")
+
+    # === ВОТ ЭТА СТРОКА УБИРАЕТ СПАМ ПРИ СТАРТЕ ===
     await bot.delete_webhook(drop_pending_updates=True)
 
-    # Запуск опроса
+    # Запуск опроса обновлений
     await dp.start_polling(bot)
 
 
@@ -41,4 +47,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Бот выключен")
+        print("Бот остановлен")
