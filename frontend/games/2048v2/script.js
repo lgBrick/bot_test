@@ -4,25 +4,66 @@ tg.expand();
 
 // === Хранилище ===
 const Storage = {
-    KEY: '2048_best_score_v3',
+    BEST_SCORE_KEY: '2048_best_score_v4', // Ключ для рекорда
+    GAME_STATE_KEY: '2048_game_state_v4', // Ключ для состояния поля
+
+    // --- Работа с РЕКОРДОМ (Cloud + Local) ---
     async getBestScore() {
+        const localScore = parseInt(localStorage.getItem(this.BEST_SCORE_KEY)) || 0;
+
+        if (!tg.CloudStorage || !tg.isVersionAtLeast('6.9')) {
+            return localScore;
+        }
+
         return new Promise((resolve) => {
-            try {
-                tg.CloudStorage.getItem(this.KEY, (err, value) => {
-                    resolve((!err && value) ? parseInt(value) : (parseInt(localStorage.getItem(this.KEY)) || 0));
-                });
-            } catch (e) {
-                resolve(parseInt(localStorage.getItem(this.KEY)) || 0);
-            }
+            tg.CloudStorage.getItem(this.BEST_SCORE_KEY, (err, value) => {
+                if (err) {
+                    console.error('Cloud Error:', err);
+                    resolve(localScore);
+                } else {
+                    const cloudScore = value ? parseInt(value) : 0;
+                    // Синхронизируем: берем максимальное
+                    if (cloudScore > localScore) {
+                        localStorage.setItem(this.BEST_SCORE_KEY, cloudScore);
+                        resolve(cloudScore);
+                    } else if (localScore > cloudScore) {
+                        // Если локально больше, пушим в облако
+                        this.setBestScore(localScore);
+                        resolve(localScore);
+                    } else {
+                        resolve(localScore);
+                    }
+                }
+            });
         });
     },
+
     setBestScore(score) {
-        localStorage.setItem(this.KEY, score);
-        try { tg.CloudStorage.setItem(this.KEY, score.toString()); } catch (e) {}
+        localStorage.setItem(this.BEST_SCORE_KEY, score);
+        if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
+            tg.CloudStorage.setItem(this.BEST_SCORE_KEY, score.toString(), (err) => {
+                if(err) console.error('Cloud Save Error', err);
+            });
+        }
+    },
+
+    // --- Работа с СОСТОЯНИЕМ ИГРЫ (Плитки) ---
+    // Сохраняем состояние только локально для скорости (чтобы не было лагов при ходе)
+    saveGameState(gridState) {
+        localStorage.setItem(this.GAME_STATE_KEY, JSON.stringify(gridState));
+    },
+
+    getGameState() {
+        const state = localStorage.getItem(this.GAME_STATE_KEY);
+        return state ? JSON.parse(state) : null;
+    },
+
+    clearGameState() {
+        localStorage.removeItem(this.GAME_STATE_KEY);
     }
 };
 
-// === Класс Плитки (Матрешка) ===
+// === Класс Плитки ===
 class Tile {
     constructor(container, value, x, y, cellSize, gap) {
         this.container = container;
@@ -34,21 +75,18 @@ class Tile {
         this.mergedFrom = null;
         this.mergedToRemove = false;
 
-        // 1. Внешний элемент (позиция)
         this.element = document.createElement('div');
         this.element.classList.add('tile', `tile-${value}`);
 
-        // 2. Внутренний элемент (визуал и анимация scale)
         this.inner = document.createElement('div');
         this.inner.classList.add('tile-inner');
         this.inner.textContent = value;
 
         this.element.appendChild(this.inner);
-
-        // Установка начальной позиции СРАЗУ (без анимации движения)
         this.updatePosition();
 
-        // Добавляем класс 'tile-new' для анимации scale только на inner
+        // Анимацию 'tile-new' добавляем только если это новая плитка, а не восстановленная
+        // Но для простоты оставим, визуально это не сильно мешает при загрузке
         this.element.classList.add('tile-new');
 
         this.container.appendChild(this.element);
@@ -59,14 +97,12 @@ class Tile {
         const yPx = this.y * (this.cellSize + this.gap);
         this.element.style.width = `${this.cellSize}px`;
         this.element.style.height = `${this.cellSize}px`;
-        // Изменяем координаты внешнего контейнера
         this.element.style.transform = `translate(${xPx}px, ${yPx}px)`;
     }
 
     updateValue(newValue) {
         this.value = newValue;
         this.inner.textContent = newValue;
-        // Обновляем классы для цвета
         this.element.className = `tile tile-${newValue <= 2048 ? newValue : 'super'}`;
     }
 
@@ -78,6 +114,14 @@ class Tile {
 
     savePosition() {
         this.previousPosition = { x: this.x, y: this.y };
+    }
+
+    // Метод для сохранения данных плитки в JSON
+    serialize() {
+        return {
+            position: { x: this.x, y: this.y },
+            value: this.value
+        };
     }
 }
 
@@ -94,7 +138,7 @@ class Game2048 {
         this.scoreEl = document.getElementById('score');
         this.bestScoreEl = document.getElementById('best-score');
         this.gameOverScreen = document.getElementById('game-over-screen');
-        this.gameMessageEl = document.getElementById('game-message'); // Получаем элемент текста
+        this.gameMessageEl = document.getElementById('game-message');
 
         this.gap = 10;
         this.calculateDimensions();
@@ -112,22 +156,83 @@ class Game2048 {
     }
 
     async init() {
+        // 1. Загружаем лучший рекорд (ждем ответа от телеграма)
         this.bestScore = await Storage.getBestScore();
         this.bestScoreEl.innerText = this.bestScore;
-        this.restart();
+
+        // 2. Проверяем, была ли незавершенная игра
+        const savedState = Storage.getGameState();
+
+        if (savedState) {
+            this.restoreGame(savedState);
+        } else {
+            this.restart();
+        }
+    }
+
+    // Восстановление игры из памяти
+    restoreGame(savedState) {
+        this.score = savedState.score;
+        this.scoreEl.innerText = this.score;
+        this.gameOverScreen.classList.remove('active');
+        this.tileContainer.innerHTML = '';
+        this.tiles = [];
+
+        // Воссоздаем плитки из JSON
+        if (savedState.tiles) {
+            savedState.tiles.forEach(tileData => {
+                const tile = new Tile(
+                    this.tileContainer,
+                    tileData.value,
+                    tileData.position.x,
+                    tileData.position.y,
+                    this.cellSize,
+                    this.gap
+                );
+                // Убираем анимацию появления при загрузке, чтобы не мелькало
+                tile.element.classList.remove('tile-new');
+                this.tiles.push(tile);
+            });
+        }
     }
 
     restart() {
+        // При рестарте очищаем сохранение
+        Storage.clearGameState();
+
         this.tileContainer.innerHTML = '';
         this.tiles = [];
         this.score = 0;
         this.updateScore(0);
-
-        // Убираем класс active для плавного скрытия
         this.gameOverScreen.classList.remove('active');
+        this.addRandomTile();
+        this.addRandomTile();
 
-        this.addRandomTile();
-        this.addRandomTile();
+        // Сразу сохраняем новое начало игры
+        this.saveData();
+    }
+
+    // Метод сохранения текущего состояния
+    saveData() {
+        // Сохраняем рекорд
+        if (this.score > this.bestScore) {
+            this.bestScore = this.score;
+            this.bestScoreEl.innerText = this.bestScore;
+            Storage.setBestScore(this.bestScore);
+        }
+
+        // Если игра проиграна - не сохраняем расстановку (чтобы при входе не видеть Game Over снова и снова)
+        if (this.gameOverScreen.classList.contains('active')) {
+            Storage.clearGameState();
+            return;
+        }
+
+        // Сохраняем расстановку плиток
+        const gridState = {
+            score: this.score,
+            tiles: this.tiles.map(tile => tile.serialize())
+        };
+        Storage.saveGameState(gridState);
     }
 
     addRandomTile() {
@@ -151,6 +256,9 @@ class Game2048 {
     }
 
     move(direction) {
+        // Если игра окончена, не двигаем
+        if (this.gameOverScreen.classList.contains('active')) return;
+
         const vector = this.getVector(direction);
         const traversals = this.buildTraversals(vector);
         let moved = false;
@@ -206,20 +314,20 @@ class Game2048 {
 
                 this.addRandomTile();
 
-                // === ПРОВЕРКА ПРОИГРЫША ===
-                // Если ходов больше нет (доска полная и слияния невозможны)
+                // === СОХРАНЯЕМ ИГРУ ПОСЛЕ КАЖДОГО УСПЕШНОГО ХОДА ===
+                this.saveData();
+
                 if (!this.movesAvailable()) {
                     this.showGameOver();
+                    // При проигрыше удаляем сохранение, чтобы следующая игра началась с нуля
+                    Storage.clearGameState();
                 }
             }, 100);
         }
     }
 
-    // === НОВЫЙ МЕТОД: Показ экрана проигрыша ===
     showGameOver() {
-        // Показываем текст с результатом
         this.gameMessageEl.innerHTML = `Игра окончена!<br>Счет: ${this.score}`;
-        // Добавляем класс для плавного появления
         this.gameOverScreen.classList.add('active');
     }
 
@@ -249,7 +357,6 @@ class Game2048 {
     }
 
     movesAvailable() {
-        // Исправлена проверка: если длина массива < 16, значит место есть
         return this.tiles.length < 16 || this.tileMatchesAvailable();
     }
 
@@ -268,10 +375,11 @@ class Game2048 {
     updateScore(newScore) {
         this.score = newScore;
         this.scoreEl.innerText = this.score;
+        // Рекорд здесь не сохраняем в облако каждый раз (чтобы не спамить),
+        // а только в переменной, сохранение будет в saveData()
         if (this.score > this.bestScore) {
             this.bestScore = this.score;
             this.bestScoreEl.innerText = this.bestScore;
-            Storage.setBestScore(this.bestScore);
         }
     }
 
@@ -279,7 +387,6 @@ class Game2048 {
         document.addEventListener('keydown', (e) => {
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
                 e.preventDefault();
-                // Если игра окончена, блокируем управление
                 if (this.gameOverScreen.classList.contains('active')) return;
                 this.move(e.key);
             }
@@ -289,7 +396,6 @@ class Game2048 {
         let startX, startY;
 
         c.addEventListener('touchstart', (e) => {
-            // Если игра окончена, блокируем свайпы
             if (this.gameOverScreen.classList.contains('active')) return;
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
@@ -298,7 +404,6 @@ class Game2048 {
         c.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false});
 
         c.addEventListener('touchend', (e) => {
-            // Если игра окончена, блокируем свайпы
             if (this.gameOverScreen.classList.contains('active')) return;
             if (!startX || !startY) return;
 
