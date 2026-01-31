@@ -3,22 +3,62 @@ tg.ready();
 tg.expand();
 
 // === Хранилище ===
+// === Хранилище (Исправленное) ===
 const Storage = {
+    // Используем уникальный ключ. Если хочешь сбросить всем прогресс - поменяй v3 на v4
     KEY: '2048_best_score_v3',
+
     async getBestScore() {
+        // 1. Сначала читаем локальное значение (это мгновенно)
+        const localScore = parseInt(localStorage.getItem(this.KEY)) || 0;
+
+        // 2. Проверяем, есть ли доступ к Telegram CloudStorage
+        // Он доступен только в версии API 6.9+
+        if (!tg.CloudStorage || !tg.isVersionAtLeast('6.9')) {
+            console.log('CloudStorage недоступен, используем localStorage');
+            return localScore;
+        }
+
+        // 3. Запрашиваем данные из облака
         return new Promise((resolve) => {
-            try {
-                tg.CloudStorage.getItem(this.KEY, (err, value) => {
-                    resolve((!err && value) ? parseInt(value) : (parseInt(localStorage.getItem(this.KEY)) || 0));
-                });
-            } catch (e) {
-                resolve(parseInt(localStorage.getItem(this.KEY)) || 0);
-            }
+            tg.CloudStorage.getItem(this.KEY, (err, value) => {
+                if (err) {
+                    console.error('Ошибка чтения CloudStorage:', err);
+                    resolve(localScore); // При ошибке отдаем локальное
+                } else {
+                    const cloudScore = value ? parseInt(value) : 0;
+
+                    // ВАЖНО: Берем MAX, чтобы не потерять прогресс при плохом интернете
+                    const finalScore = Math.max(localScore, cloudScore);
+
+                    // Если локально мы наиграли больше, чем было в облаке — обновим облако прямо сейчас
+                    if (localScore > cloudScore) {
+                        this.setBestScore(localScore);
+                    }
+                    // Если в облаке больше (с другого устройства), обновим локальное хранилище
+                    else if (cloudScore > localScore) {
+                        localStorage.setItem(this.KEY, cloudScore);
+                    }
+
+                    resolve(finalScore);
+                }
+            });
         });
     },
+
     setBestScore(score) {
+        // 1. Всегда сохраняем в localStorage (резервная копия)
         localStorage.setItem(this.KEY, score);
-        try { tg.CloudStorage.setItem(this.KEY, score.toString()); } catch (e) {}
+
+        // 2. Пытаемся сохранить в Telegram Cloud
+        if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
+            // Ключ и Значение ОБЯЗАНЫ быть строками
+            tg.CloudStorage.setItem(this.KEY, score.toString(), (err, stored) => {
+                if (err) {
+                    console.error('Ошибка сохранения в CloudStorage:', err);
+                }
+            });
+        }
     }
 };
 
