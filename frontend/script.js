@@ -24,7 +24,7 @@ const games = [
     },
     {
         id: 4,
-        title: "2048",
+        title: "2058",
         icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
         // ВАЖНО: правильный путь к папке игры
         url: "games/2048v2/index.html"
