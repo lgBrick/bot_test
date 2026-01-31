@@ -2,38 +2,85 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-// ================== STORAGE ==================
+// === Хранилище ===
 const Storage = {
-    KEY: '2048_state_v1',
-
-    async load() {
+    KEY: '2048_best_score_v3',
+    async getBestScore() {
         return new Promise((resolve) => {
             try {
                 tg.CloudStorage.getItem(this.KEY, (err, value) => {
-                    if (!err && value) {
-                        resolve(JSON.parse(value));
-                    } else {
-                        const local = localStorage.getItem(this.KEY);
-                        resolve(local ? JSON.parse(local) : null);
-                    }
+                    resolve((!err && value) ? parseInt(value) : (parseInt(localStorage.getItem(this.KEY)) || 0));
                 });
-            } catch {
-                const local = localStorage.getItem(this.KEY);
-                resolve(local ? JSON.parse(local) : null);
+            } catch (e) {
+                resolve(parseInt(localStorage.getItem(this.KEY)) || 0);
             }
         });
     },
-
-    save(state) {
-        const data = JSON.stringify(state);
-        localStorage.setItem(this.KEY, data);
-        try {
-            tg.CloudStorage.setItem(this.KEY, data);
-        } catch {}
+    setBestScore(score) {
+        localStorage.setItem(this.KEY, score);
+        try { tg.CloudStorage.setItem(this.KEY, score.toString()); } catch (e) {}
     }
 };
 
-// ================== GAME ==================
+// === Класс Плитки (Матрешка) ===
+class Tile {
+    constructor(container, value, x, y, cellSize, gap) {
+        this.container = container;
+        this.value = value;
+        this.x = x;
+        this.y = y;
+        this.cellSize = cellSize;
+        this.gap = gap;
+        this.mergedFrom = null;
+        this.mergedToRemove = false;
+
+        // 1. Внешний элемент (позиция)
+        this.element = document.createElement('div');
+        this.element.classList.add('tile', `tile-${value}`);
+
+        // 2. Внутренний элемент (визуал и анимация scale)
+        this.inner = document.createElement('div');
+        this.inner.classList.add('tile-inner');
+        this.inner.textContent = value;
+
+        this.element.appendChild(this.inner);
+
+        // Установка начальной позиции СРАЗУ (без анимации движения)
+        this.updatePosition();
+
+        // Добавляем класс 'tile-new' для анимации scale только на inner
+        this.element.classList.add('tile-new');
+
+        this.container.appendChild(this.element);
+    }
+
+    updatePosition() {
+        const xPx = this.x * (this.cellSize + this.gap);
+        const yPx = this.y * (this.cellSize + this.gap);
+        this.element.style.width = `${this.cellSize}px`;
+        this.element.style.height = `${this.cellSize}px`;
+        // Изменяем координаты внешнего контейнера
+        this.element.style.transform = `translate(${xPx}px, ${yPx}px)`;
+    }
+
+    updateValue(newValue) {
+        this.value = newValue;
+        this.inner.textContent = newValue;
+        // Обновляем классы для цвета
+        this.element.className = `tile tile-${newValue <= 2048 ? newValue : 'super'}`;
+    }
+
+    remove() {
+        if (this.element.parentNode) {
+            this.element.parentNode.removeChild(this.element);
+        }
+    }
+
+    savePosition() {
+        this.previousPosition = { x: this.x, y: this.y };
+    }
+}
+
 // === ИГРОВОЙ ДВИЖОК ===
 class Game2048 {
     constructor() {
@@ -47,7 +94,6 @@ class Game2048 {
         this.scoreEl = document.getElementById('score');
         this.bestScoreEl = document.getElementById('best-score');
         this.gameOverScreen = document.getElementById('game-over-screen');
-        this.gameMessageEl = document.getElementById('game-message'); // Получаем элемент текста
 
         this.gap = 10;
         this.calculateDimensions();
@@ -75,10 +121,7 @@ class Game2048 {
         this.tiles = [];
         this.score = 0;
         this.updateScore(0);
-
-        // Убираем класс active для плавного скрытия
-        this.gameOverScreen.classList.remove('active');
-
+        this.gameOverScreen.style.display = 'none';
         this.addRandomTile();
         this.addRandomTile();
     }
@@ -111,6 +154,7 @@ class Game2048 {
         this.tiles.forEach(t => {
             t.mergedFrom = null;
             t.savePosition();
+            // Удаляем классы анимации появления перед движением, чтобы не мешали
             t.element.classList.remove('tile-new', 'tile-merged');
         });
 
@@ -123,13 +167,17 @@ class Game2048 {
                     const next = this.getCellContent(positions.next.x, positions.next.y);
 
                     if (next && next.value === tile.value && !next.mergedFrom) {
+                        // СЛИЯНИЕ
+                        // 1. Создаем новую плитку в точке назначения
                         const merged = new Tile(this.tileContainer, tile.value * 2, next.x, next.y, this.cellSize, this.gap);
-                        merged.element.classList.add('tile-merged');
+                        merged.element.classList.add('tile-merged'); // Pop animation
 
+                        // 2. Двигаем старые плитки визуально в эту точку
                         tile.x = next.x;
                         tile.y = next.y;
-                        tile.updatePosition();
+                        tile.updatePosition(); // Slide animation
 
+                        // 3. Помечаем старые как "на удаление"
                         tile.mergedToRemove = true;
                         next.mergedToRemove = true;
 
@@ -139,6 +187,7 @@ class Game2048 {
                         this.updateScore(this.score + merged.value);
                         moved = true;
                     } else {
+                        // ПРОСТО ДВИЖЕНИЕ
                         if (positions.farthest.x !== x || positions.farthest.y !== y) {
                             tile.x = positions.farthest.x;
                             tile.y = positions.farthest.y;
@@ -151,6 +200,7 @@ class Game2048 {
         });
 
         if (moved) {
+            // Удаляем старые слитые плитки ПОСЛЕ того, как закончится анимация движения (100ms)
             setTimeout(() => {
                 this.tiles.forEach(t => {
                     if(t.mergedToRemove) t.remove();
@@ -159,21 +209,11 @@ class Game2048 {
 
                 this.addRandomTile();
 
-                // === ПРОВЕРКА ПРОИГРЫША ===
-                // Если ходов больше нет (доска полная и слияния невозможны)
                 if (!this.movesAvailable()) {
-                    this.showGameOver();
+                    this.gameOverScreen.style.display = 'flex';
                 }
             }, 100);
         }
-    }
-
-    // === НОВЫЙ МЕТОД: Показ экрана проигрыша ===
-    showGameOver() {
-        // Показываем текст с результатом
-        this.gameMessageEl.innerHTML = `Игра окончена!<br>Счет: ${this.score}`;
-        // Добавляем класс для плавного появления
-        this.gameOverScreen.classList.add('active');
     }
 
     getVector(direction) {
@@ -202,8 +242,7 @@ class Game2048 {
     }
 
     movesAvailable() {
-        // Исправлена проверка: если длина массива < 16, значит место есть
-        return this.tiles.length < 16 || this.tileMatchesAvailable();
+        return !!this.tiles.length < 16 || this.tileMatchesAvailable();
     }
 
     tileMatchesAvailable() {
@@ -232,8 +271,6 @@ class Game2048 {
         document.addEventListener('keydown', (e) => {
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
                 e.preventDefault();
-                // Если игра окончена, блокируем управление
-                if (this.gameOverScreen.classList.contains('active')) return;
                 this.move(e.key);
             }
         });
@@ -242,8 +279,6 @@ class Game2048 {
         let startX, startY;
 
         c.addEventListener('touchstart', (e) => {
-            // Если игра окончена, блокируем свайпы
-            if (this.gameOverScreen.classList.contains('active')) return;
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
         }, {passive: false});
@@ -251,10 +286,6 @@ class Game2048 {
         c.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false});
 
         c.addEventListener('touchend', (e) => {
-            // Если игра окончена, блокируем свайпы
-            if (this.gameOverScreen.classList.contains('active')) return;
-            if (!startX || !startY) return;
-
             const dx = e.changedTouches[0].clientX - startX;
             const dy = e.changedTouches[0].clientY - startY;
             if (Math.max(Math.abs(dx), Math.abs(dy)) > 30) {
