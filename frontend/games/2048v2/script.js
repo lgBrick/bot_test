@@ -2,6 +2,10 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
+tg.CloudStorage.getItem('2048_game_state_v1', (e, v) => {
+    console.log('☁️ CloudStorage raw:', e, v);
+});
+
 /* ================= STORAGE ================= */
 
 const Storage = {
@@ -130,9 +134,16 @@ class Game2048 {
         this.bestScoreEl.innerText = this.bestScore;
 
         const saved = await Storage.loadGame();
-        if (saved?.tiles?.length) this.restoreState(saved);
-        else this.restart();
+
+        if (saved && Array.isArray(saved.tiles) && saved.tiles.length > 0) {
+            console.log('♻️ Game restored from storage');
+            this.restoreState(saved);
+        } else {
+            console.log('🆕 No save found, starting new game');
+            this.startNewGame(); // ⚠️ БЕЗ очистки storage
+        }
     }
+
 
     restoreState(state) {
         this.tileContainer.innerHTML = '';
@@ -164,8 +175,7 @@ class Game2048 {
         });
     }
 
-    restart() {
-        Storage.clearGame();
+    startNewGame() {
         this.tileContainer.innerHTML = '';
         this.tiles = [];
         this.score = 0;
@@ -174,6 +184,12 @@ class Game2048 {
         this.addRandomTile();
         this.addRandomTile();
     }
+
+    restart() {
+        Storage.clearGame(); // ✔️ только по кнопке
+        this.startNewGame();
+    }
+
 
     addRandomTile() {
         const empty = [];
@@ -294,4 +310,10 @@ class Game2048 {
     }
 }
 
-new Game2048();
+const game = new Game2048();
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        console.log('💾 Saving game (visibilitychange)');
+        game.saveState();
+    }
+});
