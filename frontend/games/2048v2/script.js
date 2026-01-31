@@ -1,3 +1,39 @@
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+
+// ================== STORAGE ==================
+const Storage = {
+    KEY: '2048_state_v1',
+
+    async load() {
+        return new Promise((resolve) => {
+            try {
+                tg.CloudStorage.getItem(this.KEY, (err, value) => {
+                    if (!err && value) {
+                        resolve(JSON.parse(value));
+                    } else {
+                        const local = localStorage.getItem(this.KEY);
+                        resolve(local ? JSON.parse(local) : null);
+                    }
+                });
+            } catch {
+                const local = localStorage.getItem(this.KEY);
+                resolve(local ? JSON.parse(local) : null);
+            }
+        });
+    },
+
+    save(state) {
+        const data = JSON.stringify(state);
+        localStorage.setItem(this.KEY, data);
+        try {
+            tg.CloudStorage.setItem(this.KEY, data);
+        } catch {}
+    }
+};
+
+// ================== GAME ==================
 // === ИГРОВОЙ ДВИЖОК ===
 class Game2048 {
     constructor() {
@@ -39,10 +75,10 @@ class Game2048 {
         this.tiles = [];
         this.score = 0;
         this.updateScore(0);
-        
+
         // Убираем класс active для плавного скрытия
         this.gameOverScreen.classList.remove('active');
-        
+
         this.addRandomTile();
         this.addRandomTile();
     }
@@ -131,7 +167,7 @@ class Game2048 {
             }, 100);
         }
     }
-    
+
     // === НОВЫЙ МЕТОД: Показ экрана проигрыша ===
     showGameOver() {
         // Показываем текст с результатом
@@ -218,7 +254,7 @@ class Game2048 {
             // Если игра окончена, блокируем свайпы
             if (this.gameOverScreen.classList.contains('active')) return;
             if (!startX || !startY) return;
-            
+
             const dx = e.changedTouches[0].clientX - startX;
             const dy = e.changedTouches[0].clientY - startY;
             if (Math.max(Math.abs(dx), Math.abs(dy)) > 30) {
@@ -228,3 +264,5 @@ class Game2048 {
         }, {passive: false});
     }
 }
+
+new Game2048();
