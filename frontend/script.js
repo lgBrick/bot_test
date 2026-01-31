@@ -1,29 +1,37 @@
 const tg = window.Telegram.WebApp;
-tg.expand(); // Раскрыть на весь экран
+tg.expand();
+tg.enableClosingConfirmation(); // Спрашивать подтверждение при закрытии
 
-// Список игр
+// Определяем категории (автоматически или вручную)
+const CATEGORIES = ["Все", "Головоломки", "Аркады", "Новые"];
+
+// Список игр (Добавил поле category)
 const games = [
     {
         id: 1,
         title: "2048",
+        category: "Головоломки",
         icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
         url: "games/2048/index.html"
     },
     {
         id: 2,
         title: "Hextris",
+        category: "Аркады",
         icon: "https://hextris.io/images/touch-icon-iphone-retina.png",
         url: "games/hextris/index.html"
     },
     {
         id: 3,
         title: "Minesweeper",
+        category: "Головоломки",
         icon: "https://img.icons8.com/emoji/48/bomb-emoji.png",
         url: "games/minesweeper/index.html"
     },
     {
         id: 4,
         title: "2058",
+        category: "Новые",
         icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
         url: "games/2048v2/index.html"
     }
@@ -31,74 +39,131 @@ const games = [
 
 const gamesContainer = document.getElementById("games-container");
 const searchInput = document.getElementById("search-input");
+const categoriesContainer = document.getElementById("categories-container");
 const mainScreen = document.getElementById("main-screen");
 const gameScreen = document.getElementById("game-screen");
 const gameContent = document.getElementById("game-content");
+const gameLoader = document.getElementById("game-loader");
 
-// 1. Функция отрисовки игр
+let activeCategory = "Все";
+
+// --- ИНИЦИАЛИЗАЦИЯ ---
+
+function init() {
+    renderCategories();
+    renderGames();
+}
+
+// --- КАТЕГОРИИ ---
+
+function renderCategories() {
+    categoriesContainer.innerHTML = "";
+    CATEGORIES.forEach(cat => {
+        const chip = document.createElement("div");
+        chip.className = `category-chip ${cat === activeCategory ? 'active' : ''}`;
+        chip.innerText = cat;
+
+        chip.addEventListener("click", () => {
+            // Вибрация при смене категории
+            tg.HapticFeedback.impactOccurred('light');
+
+            // Обновляем UI
+            document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+
+            activeCategory = cat;
+            renderGames(searchInput.value);
+        });
+
+        categoriesContainer.appendChild(chip);
+    });
+}
+
+// --- ОТРИСОВКА ИГР ---
+
 function renderGames(filterText = "") {
-    gamesContainer.innerHTML = ""; // Очистить текущий список
+    gamesContainer.innerHTML = "";
 
-    const filteredGames = games.filter(game =>
-        game.title.toLowerCase().includes(filterText.toLowerCase())
-    );
+    const filtered = games.filter(game => {
+        const matchesSearch = game.title.toLowerCase().includes(filterText.toLowerCase());
+        const matchesCategory = activeCategory === "Все" || game.category === activeCategory;
+        return matchesSearch && matchesCategory;
+    });
 
-    filteredGames.forEach(game => {
+    // Анимация появления (постепенная)
+    filtered.forEach((game, index) => {
         const card = document.createElement("div");
         card.className = "game-card";
+        card.style.animation = `fadeIn 0.3s ease-out ${index * 0.05}s both`; // Каскадная анимация
 
-        // Создаем карточку
         card.innerHTML = `
             <div class="game-icon" style="background-image: url('${game.icon}')"></div>
             <div class="game-title">${game.title}</div>
         `;
 
-        // Клик по игре
         card.addEventListener("click", () => openGame(game));
         gamesContainer.appendChild(card);
     });
-}
 
-// 2. Функция открытия игры
-function openGame(game) {
-    // Переключаем экраны
-    mainScreen.style.display = "none";
-    gameScreen.style.display = "flex"; // Используем flex для центрирования, если в CSS задано
-
-    // Показываем нативную кнопку "Назад" в Telegram
-    tg.BackButton.show();
-
-    if (game.url) {
-        // Добавляем ?v=TIME для уникальности ссылки (чтобы не было кеширования старой версии)
-        const cacheBuster = `?v=${Date.now()}`;
-
-        // Вставляем iframe.
-        // allow="autoplay" нужен для звуков в некоторых играх.
-        // style="height: 100%" важен, чтобы игра заняла весь экран.
-        gameContent.innerHTML = `
-            <iframe
-                src="${game.url}${cacheBuster}"
-                style="width: 100%; height: 100%; border: none;"
-                allow="autoplay; fullscreen; vibration"
-            ></iframe>`;
+    if (filtered.length === 0) {
+        gamesContainer.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--tg-theme-hint-color); padding: 20px;">Ничего не найдено</div>`;
     }
 }
 
-// 3. Обработка кнопки "Назад" (в шапке Телеграма)
+// --- ОТКРЫТИЕ ИГРЫ ---
+
+function openGame(game) {
+    // Сильная вибрация при запуске
+    tg.HapticFeedback.impactOccurred('medium');
+
+    mainScreen.style.display = "none";
+    gameScreen.style.display = "flex";
+    gameLoader.style.display = "block"; // Показать спиннер
+    tg.BackButton.show();
+
+    if (game.url) {
+        const iframe = document.createElement('iframe');
+        iframe.src = `${game.url}?v=${Date.now()}`;
+        iframe.style.width = "100%";
+        iframe.style.height = "100%";
+        iframe.style.border = "none";
+        iframe.allow = "autoplay; fullscreen; vibration; gyroscope; accelerometer";
+
+        // Убираем лоадер когда iframe загрузился
+        iframe.onload = () => {
+            gameLoader.style.display = "none";
+        };
+
+        gameContent.innerHTML = "";
+        gameContent.appendChild(iframe);
+    }
+}
+
+// --- ОБРАБОТЧИКИ СОБЫТИЙ ---
+
 tg.BackButton.onClick(() => {
+    tg.HapticFeedback.impactOccurred('light');
+
     gameScreen.style.display = "none";
     mainScreen.style.display = "block";
-
-    gameContent.innerHTML = ""; // Полностью удаляем игру, чтобы остановить звуки и скрипты
-    tg.BackButton.hide(); // Скрываем кнопку
+    gameContent.innerHTML = "";
+    tg.BackButton.hide();
 });
 
-// 4. Слушаем ввод в поиск
 if (searchInput) {
     searchInput.addEventListener("input", (e) => {
         renderGames(e.target.value);
     });
 }
 
-// Запуск при старте
-renderGames();
+// Добавляем стиль для анимации в JS динамически (или можно в CSS)
+const styleSheet = document.createElement("style");
+styleSheet.innerText = `
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}`;
+document.head.appendChild(styleSheet);
+
+// Запуск
+init();
