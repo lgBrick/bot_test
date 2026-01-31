@@ -181,12 +181,11 @@ body {
     font-size: 30px;
     font-weight: bold;
     margin-bottom: 20px;
-    color: #ffffff;
+    color: var(--text-color);
     text-align: center;
     line-height: 1.5;
 }
 
 @media (prefers-color-scheme: dark) {
     .game-over { background: rgba(0, 0, 0, 0.85); }
-}
 }
