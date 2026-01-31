@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2048</title>
+    <!-- Подключение Telegram WebApp -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Подключение стилей -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="header">
+        <div class="title">2048</div>
+        <div class="scores">
+            <div class="score-box">
+                <div class="score-title">Счет</div>
+                <div class="score-value" id="score">0</div>
+            </div>
+            <div class="score-box">
+                <div class="score-title">Рекорд</div>
+                <div class="score-value" id="best-score">0</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="new-game-btn" id="restart-btn">Новая игра</button>
+    </div>
+
+    <div class="game-wrapper">
+        <div class="game-container" id="game-container">
+            <div class="grid-bg">
+                <!-- Сетка 4x4 -->
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+            </div>
+
+            <div class="tile-container" id="tile-container">
+                <!-- Плитки добавляются через JS -->
+            </div>
+
+            <div class="game-over" id="game-over-screen">
+                <div class="game-message" id="game-message">Game Over!</div>
+                <button class="new-game-btn" id="retry-btn">Еще раз</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Подключение логики -->
+    <script src="script.js"></script>
+</body>
+</html>
