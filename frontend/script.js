@@ -64,16 +64,22 @@ function openGame(game) {
     mainScreen.style.display = "none";
     gameScreen.style.display = "block";
 
+    // Показываем кнопку назад
     tg.BackButton.show();
-    document.getElementById("game-title-display").innerText = game.title;
+
+    // (Опционально) Меняем цвет хедера на цвет игры, если нужно
+    // tg.setHeaderColor(game.color || "#ffffff");
 
     if (game.url) {
-        // Добавляем ?v= и текущее время, чтобы ссылка всегда была уникальной
+        // Добавляем ?v= и время для сброса кеша
         const cacheBuster = `?v=${Date.now()}`;
+
+        // Используем 100% высоты без заголовков
         gameContent.innerHTML = `
             <iframe src="${game.url}${cacheBuster}"
-                    style="width: 100%; height: 85vh; border: none;">
-            </iframe>`;
+                    allow="autoplay; fullscreen; vibration"
+                    sandbox="allow-scripts allow-same-origin allow-forms"
+            ></iframe>`;
     }
 }
 
