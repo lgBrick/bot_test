@@ -21,7 +21,7 @@ const games = [
         title: "Minesweeper",
         icon: "https://img.icons8.com/emoji/48/bomb-emoji.png",
         url: "games/minesweeper/index.html"
-    }
+    },
     {
         id: 4,
         title: "2048",
