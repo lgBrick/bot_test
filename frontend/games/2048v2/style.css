@@ -8,7 +8,6 @@
 
     --grid-size: 300px;
     --gap-size: 10px;
-    --cell-size: calc((var(--grid-size) - 5 * var(--gap-size)) / 4);
 }
 
 body {
@@ -22,22 +21,42 @@ body {
     align-items: center;
     justify-content: center;
     height: 100vh;
-    user-select: none;
     overflow: hidden;
-    touch-action: none; /* Критично для свайпов на Android */
+    user-select: none;
 }
 
-/* Шапка */
-.header { width: var(--grid-size); display: flex; justify-content: space-between; margin-bottom: 20px; }
+/* --- Шапка и Кнопки --- */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: var(--grid-size);
+    margin-bottom: 20px;
+}
 .title { font-size: 40px; font-weight: bold; color: var(--text-color); }
 .scores { display: flex; gap: 10px; }
-.score-box { background-color: var(--secondary-bg); padding: 5px 15px; border-radius: 5px; text-align: center; min-width: 60px; }
+.score-box {
+    background-color: var(--secondary-bg);
+    padding: 5px 15px;
+    border-radius: 5px;
+    text-align: center;
+    min-width: 60px;
+}
 .score-title { font-size: 10px; color: var(--hint-color); text-transform: uppercase; }
 .score-value { font-size: 18px; font-weight: bold; }
 .controls { width: var(--grid-size); display: flex; justify-content: flex-end; margin-bottom: 15px; }
-.new-game-btn { background-color: var(--button-color); color: var(--button-text-color); border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+.new-game-btn {
+    background-color: var(--button-color);
+    color: var(--button-text-color);
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
 
-/* Игровое поле */
+/* --- Игровое поле --- */
 .game-container {
     width: var(--grid-size);
     height: var(--grid-size);
@@ -46,6 +65,7 @@ body {
     position: relative;
     padding: var(--gap-size);
     box-sizing: border-box;
+    touch-action: none;
 }
 
 .grid-bg {
@@ -58,43 +78,48 @@ body {
 }
 
 .grid-cell {
-    background-color: rgba(0,0,0,0.05);
+    background-color: rgba(128, 128, 128, 0.15);
     border-radius: 5px;
 }
 
-/* --- ПЛИТКИ --- */
 .tile-container {
     position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%;
+    top: 0; left: 0; right: 0; bottom: 0;
+    margin: var(--gap-size);
     pointer-events: none;
+}
+
+/* --- Плитка (Контейнер) --- */
+/* Отвечает ТОЛЬКО за позицию на поле */
+.tile {
+    position: absolute;
+    /* width/height задаются в JS */
+    transition: transform 100ms ease-in-out; /* Плавное скольжение */
     z-index: 10;
 }
 
-.tile {
-    position: absolute;
-    width: var(--cell-size);
-    height: var(--cell-size);
+/* --- Внутренность плитки --- */
+/* Отвечает за цвет, размер и анимацию появления */
+.tile-inner {
+    width: 100%;
+    height: 100%;
     border-radius: 5px;
     display: flex;
     justify-content: center;
     align-items: center;
+    font-size: 28px;
     font-weight: bold;
-    font-size: 30px;
-    z-index: 10;
-
-    /* Анимация движения */
-    transition: transform 0.1s ease-in-out;
+    background-color: #eee4da;
+    color: #000;
 }
 
-/* ВАЖНО: У новых плиток отключаем transition перемещения, чтобы они не летели из угла */
-.tile-new {
-    transition: none;
-    animation: appear 0.2s ease-in-out forwards;
+/* Анимация появления (scale) не будет сбивать transform (translate) родителя */
+.tile-new .tile-inner {
+    animation: appear 200ms ease-in-out backwards;
 }
 
-.tile-merged {
-    z-index: 20;
-    animation: pop 0.2s ease-in-out forwards;
+.tile-merged .tile-inner {
+    animation: pop 200ms ease-in-out backwards;
 }
 
 @keyframes appear {
@@ -103,34 +128,65 @@ body {
 }
 
 @keyframes pop {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.2); }
+    0% { transform: scale(0.8); }
+    50% { transform: scale(1.1); }
     100% { transform: scale(1); }
 }
 
-/* Цвета Telegram */
-.tile-2 { background: #ffffff; color: var(--text-color); box-shadow: 0 0 2px rgba(0,0,0,0.1); }
-.tile-4 { background: #eef2f5; color: var(--text-color); }
-.tile-8 { background: #dcebf7; color: var(--text-color); }
-.tile-16 { background: #c5e0f7; color: var(--button-color); }
-.tile-32 { background: #a8d1f7; color: var(--button-color); }
-.tile-64 { background: #86c0f7; color: #ffffff; background-color: var(--button-color); opacity: 0.7; }
-.tile-128 { background-color: var(--button-color); opacity: 0.8; color: #fff; font-size: 26px; }
-.tile-256 { background-color: var(--button-color); opacity: 0.9; color: #fff; font-size: 26px; }
-.tile-512 { background-color: var(--button-color); opacity: 1; color: #fff; font-size: 26px; }
-.tile-1024 { background-color: #2b7ac9; color: #fff; font-size: 20px; }
-.tile-2048 { background-color: #205c96; color: #fff; font-size: 20px; box-shadow: 0 0 10px var(--button-color); }
+/* --- Цвета (Градиент от серого к синему) --- */
+/* 2-4: Светлые, текст темный */
+.tile-2 .tile-inner    { background: #ffffff; color: #333; box-shadow: 0 0 2px rgba(0,0,0,0.1); }
+.tile-4 .tile-inner    { background: #e3e8eb; color: #333; }
 
+/* 8+: Синеют, текст белый */
+.tile-8 .tile-inner    { background: #b0c4de; color: #fff; }
+.tile-16 .tile-inner   { background: #87b3d4; color: #fff; }
+.tile-32 .tile-inner   { background: #6da2cb; color: #fff; }
+.tile-64 .tile-inner   { background: #5391c2; color: #fff; }
+.tile-128 .tile-inner  { background: #3b80b9; color: #fff; font-size: 24px; }
+.tile-256 .tile-inner  { background: #2a70b0; color: #fff; font-size: 24px; }
+.tile-512 .tile-inner  { background: #1e60a7; color: #fff; font-size: 24px; }
+.tile-1024 .tile-inner { background: #14509e; color: #fff; font-size: 18px; }
+.tile-2048 .tile-inner { background: #0b4094; color: #fff; font-size: 18px; box-shadow: 0 0 10px #0b4094; }
+.tile-super .tile-inner { background: #000000; color: #fff; font-size: 14px; }
+
+/* --- Game Over (Изменено) --- */
 .game-over {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+
+    /* Фон делаем чуть темнее для лучшего контраста */
     background: rgba(255, 255, 255, 0.8);
-    display: none; flex-direction: column; justify-content: center; align-items: center;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border-radius: 10px;
     z-index: 100;
+
+    /* Анимация затухания */
+    opacity: 0;
+    pointer-events: none; /* Чтобы сквозь невидимый блок можно было кликать */
+    transition: opacity 500ms ease-in-out;
+}
+
+/* Класс, который мы будем добавлять через JS для показа */
+.game-over.active {
+    opacity: 1;
+    pointer-events: auto; /* Включаем клики по кнопке */
+}
+
+.game-message {
+    font-size: 30px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    color: #ffffff;
+    text-align: center;
+    line-height: 1.5;
 }
 
 @media (prefers-color-scheme: dark) {
-    .game-over { background: rgba(0, 0, 0, 0.8); }
-    .grid-cell { background-color: rgba(255, 255, 255, 0.1); }
-    .tile-2 { background: #2b2b2b; color: var(--text-color); }
-    .tile-4 { background: #3b3b3b; color: var(--text-color); }
+    .game-over { background: rgba(0, 0, 0, 0.85); }
+}
 }
