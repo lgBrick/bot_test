@@ -1,263 +1,144 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // === 1. ИНИЦИАЛИЗАЦИЯ ===
     const tg = window.Telegram.WebApp;
     tg.ready();
     if (tg.expand) tg.expand();
 
-    // Haptic wrapper
-    const haptic = (style) => {
-        if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred(style);
+    function haptic(type = 'medium') {
+        if (tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
+            tg.HapticFeedback.impactOccurred(type);
+        }
+    }
+
+    // === 2. ХРАНИЛИЩЕ ===
+    // Используем уникальные ключи для разных размеров поля, если нужно,
+    // но пока используем общий, так как параметры приходят извне или дефолтные.
+    const STORAGE_KEY = 'minesweeper_game_v2';
+
+    const StorageManager = {
+        saveState(state) {
+            // Перед сохранением обновляем elapsed, чтобы не потерять секунды
+            if (state.startTime) {
+                state.elapsedTime += Math.floor((Date.now() - state.startTime) / 1000);
+                state.startTime = Date.now(); // Сброс базы для следующего отрезка
+            }
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        },
+        getState() {
+            try {
+                return JSON.parse(localStorage.getItem(STORAGE_KEY));
+            } catch (e) { return null; }
+        },
+        clearState() {
+            localStorage.removeItem(STORAGE_KEY);
+        }
     };
 
-    // --- CONFIG & STATE ---
-    const STORAGE_KEY_RECORDS = 'minesweeper_records_v2';
-    const STORAGE_KEY_STATE = 'minesweeper_state_v2';
+    // Читаем параметры из URL (если игра запускается в iframe с параметрами)
+    // Или используем дефолт.
+    const urlParams = new URLSearchParams(window.location.search);
+    const CONFIG = {
+        rows: parseInt(urlParams.get('rows')) || 10,
+        cols: parseInt(urlParams.get('cols')) || 10,
+        mines: parseInt(urlParams.get('mines')) || 15
+    };
 
-    const PRESETS = {
-        novice: { rows: 9, cols: 9, mines: 10, name: 'Новичок' },
-        amateur: { rows: 16, cols: 16, mines: 40, name: 'Любитель' },
-        expert: { rows: 16, cols: 30, mines: 99, name: 'Эксперт' }
+    const UI = {
+        grid: document.getElementById('grid'),
+        minesCount: document.getElementById('mines-count'),
+        timer: document.getElementById('timer'),
+        faceBtn: document.getElementById('restart-btn'),
+        overlay: document.getElementById('result-overlay'),
+        resultTitle: document.getElementById('result-title'),
+        overlayBtn: document.getElementById('overlay-restart-btn')
     };
 
     let gameState = {
         grid: [],
-        config: {},
-        status: 'menu', // menu, playing, won, lost
-        startTime: 0,   // timestamp начала игры
-        elapsedTime: 0, // накопленное время (если пауза/релоад)
-        flagsPlaced: 0,
-        firstMove: true
+        status: 'new', // new, playing, won, lost
+        timer: 0,
+        elapsedTime: 0, // Накопленное время в секундах
+        startTime: null, // Timestamp начала текущей сессии
+        flags: CONFIG.mines
     };
 
     let timerInterval = null;
-    let records = {};
-
-    // --- DOM ELEMENTS ---
-    const screens = {
-        menu: document.getElementById('menu-screen'),
-        game: document.getElementById('game-screen')
-    };
-
-    const ui = {
-        grid: document.getElementById('grid'),
-        minesCounter: document.getElementById('mines-count'),
-        timer: document.getElementById('timer'),
-        faceBtn: document.getElementById('face-btn'),
-        overlay: document.getElementById('result-overlay'),
-        resultTitle: document.getElementById('result-title'),
-        resultTime: document.getElementById('result-time'),
-        records: {
-            novice: document.getElementById('rec-novice'),
-            amateur: document.getElementById('rec-amateur'),
-            expert: document.getElementById('rec-expert')
-        }
-    };
-
-    // --- STORAGE MANAGER ---
-    const Storage = {
-        load() {
-            // Загрузка рекордов
-            const recs = localStorage.getItem(STORAGE_KEY_RECORDS);
-            if (recs) records = JSON.parse(recs);
-
-            // Попытка восстановить состояние
-            const savedState = localStorage.getItem(STORAGE_KEY_STATE);
-            if (savedState) {
-                try {
-                    const parsed = JSON.parse(savedState);
-                    if (parsed.status === 'playing') {
-                        restoreGame(parsed);
-                        return true; // Восстановили
-                    }
-                } catch(e) { console.error(e); }
-            }
-            return false;
-        },
-
-        saveState() {
-            if (gameState.status === 'playing') {
-                // Обновляем прошедшее время перед сохранением
-                const currentElapsed = gameState.elapsedTime + (Date.now() - gameState.startTime);
-                const stateToSave = {
-                    ...gameState,
-                    elapsedTime: currentElapsed, // Сохраняем актуальное время
-                    startTime: Date.now() // Сдвигаем старт, чтобы не дублировать
-                };
-                localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(stateToSave));
-            } else {
-                localStorage.removeItem(STORAGE_KEY_STATE);
-            }
-        },
-
-        saveRecord(mode, time) {
-            if (!PRESETS[mode]) return false; // Не сохраняем кастомные
-            if (!records[mode] || time < records[mode]) {
-                records[mode] = time;
-                localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(records));
-                // Sync with Cloud
-                if (tg.CloudStorage) {
-                    tg.CloudStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(records));
-                }
-                return true;
-            }
-            return false;
-        }
-    };
-
-    // --- GAME LOGIC ---
 
     function init() {
-        // Рендер рекордов в меню
-        renderRecords();
+        UI.faceBtn.addEventListener('click', startNewGame);
+        UI.overlayBtn.addEventListener('click', startNewGame);
 
-        // Кнопки меню
-        document.querySelectorAll('.menu-btn[data-mode]').forEach(btn => {
-            btn.addEventListener('click', () => startGame(btn.dataset.mode));
-        });
+        // CSS Grid
+        UI.grid.style.gridTemplateColumns = `repeat(${CONFIG.cols}, 34px)`; // 34px = ширина cell
 
-        // Кастомная игра
-        document.getElementById('start-custom').addEventListener('click', () => {
-            const r = parseInt(document.getElementById('c-rows').value) || 10;
-            const c = parseInt(document.getElementById('c-cols').value) || 10;
-            const m = parseInt(document.getElementById('c-mines').value) || 10;
-            // Валидация
-            const rows = Math.min(30, Math.max(5, r));
-            const cols = Math.min(30, Math.max(5, c));
-            const mines = Math.min(rows * cols - 1, Math.max(1, m));
-
-            startGame('custom', { rows, cols, mines });
-        });
-
-        // Кнопки в игре
-        ui.faceBtn.addEventListener('click', () => {
-            haptic('medium');
-            startGame(gameState.config.mode, gameState.config);
-        });
-
-        document.getElementById('back-btn').addEventListener('click', showMenu);
-        document.getElementById('restart-btn').addEventListener('click', () => {
-             ui.overlay.classList.remove('visible');
-             startGame(gameState.config.mode, gameState.config);
-        });
-        document.getElementById('menu-btn-over').addEventListener('click', () => {
-            ui.overlay.classList.remove('visible');
-            showMenu();
-        });
-
-        // Попытка восстановления
-        if (!Storage.load()) {
-            showMenu();
+        const saved = StorageManager.getState();
+        // Восстанавливаем, только если конфиг совпадает и игра не закончена
+        if (saved && saved.status === 'playing' &&
+            saved.grid.length === CONFIG.rows && saved.grid[0].length === CONFIG.cols) {
+            restoreGame(saved);
         } else {
-            // Если восстановили, показываем экран игры
-            screens.menu.classList.add('hidden');
-            screens.game.classList.remove('hidden');
+            startNewGame();
         }
     }
 
-    function showMenu() {
+    function startNewGame() {
         stopTimer();
-        renderRecords();
-        screens.game.classList.add('hidden');
-        screens.menu.classList.remove('hidden');
-        gameState.status = 'menu';
-        Storage.saveState(); // очистит сохранение
-    }
-
-    function renderRecords() {
-        for (let key in PRESETS) {
-            if (ui.records[key]) {
-                const ms = records[key];
-                ui.records[key].innerText = ms ? formatTime(ms) : '--:--';
-            }
-        }
-    }
-
-    function startGame(mode, customConfig = null) {
-        stopTimer();
-        screens.menu.classList.add('hidden');
-        screens.game.classList.remove('hidden');
-
-        const cfg = customConfig || PRESETS[mode];
         gameState = {
-            config: { ...cfg, mode }, // сохраняем mode
-            grid: [],
-            status: 'playing',
-            startTime: 0,
+            grid: createEmptyGrid(),
+            status: 'new',
             elapsedTime: 0,
-            flagsPlaced: 0,
-            firstMove: true
+            startTime: null,
+            flags: CONFIG.mines
         };
-
-        // Создаем пустую сетку
-        createGrid();
-        renderGridDOM();
+        UI.overlay.classList.remove('visible');
+        UI.faceBtn.innerText = '🙂';
         updateHeader();
-
-        ui.faceBtn.innerText = '🙂';
-        Storage.saveState();
+        renderGrid();
+        StorageManager.clearState();
     }
 
     function restoreGame(saved) {
         gameState = saved;
-        // Восстанавливаем таймер
-        gameState.startTime = Date.now(); // Считаем, что продолжили прямо сейчас
-        startTimer();
-
-        renderGridDOM();
+        gameState.startTime = Date.now(); // Продолжаем отсчет с текущего момента
         updateHeader();
-
-        // Восстанавливаем визуал ячеек
-        gameState.grid.forEach(row => row.forEach(cell => {
-            const el = getCellEl(cell.x, cell.y);
-            updateCellVisual(el, cell);
-        }));
+        renderGrid();
+        startTimer();
     }
 
-    function createGrid() {
-        const { rows, cols } = gameState.config;
-        gameState.grid = [];
-        for (let y = 0; y < rows; y++) {
+    function createEmptyGrid() {
+        let grid = [];
+        for (let y = 0; y < CONFIG.rows; y++) {
             let row = [];
-            for (let x = 0; x < cols; x++) {
-                row.push({
-                    x, y,
-                    isMine: false,
-                    isOpen: false,
-                    isFlagged: false,
-                    count: 0
-                });
+            for (let x = 0; x < CONFIG.cols; x++) {
+                row.push({ x, y, isMine: false, isOpen: false, isFlagged: false, count: 0 });
             }
-            gameState.grid.push(row);
+            grid.push(row);
         }
+        return grid;
     }
 
-    // --- FAIR GENERATION (Без угадывания) ---
+    // === ГЕНЕРАЦИЯ (FAIR PLAY) ===
+    // Гарантирует, что safeX, safeY будет "0" (пустой областью)
     function generateMines(safeX, safeY) {
-        const { rows, cols, mines } = gameState.config;
-
-        // 1. Сначала ставим мины случайно
-        // 2. Считаем цифры
-        // 3. Проверяем, является ли safeX, safeY нулем (пустым местом)
-        // Если нет -> перегенерируем.
-        // Это гарантирует "островок" безопасности при старте.
-
         let attempts = 0;
         let success = false;
 
+        // Пытаемся сгенерировать поле, где клик попадает в 0
         while (!success && attempts < 1000) {
             // Очистка
-            for(let y=0; y<rows; y++)
-                for(let x=0; x<cols; x++) {
+            for(let y=0; y<CONFIG.rows; y++)
+                for(let x=0; x<CONFIG.cols; x++) {
                     gameState.grid[y][x].isMine = false;
                     gameState.grid[y][x].count = 0;
                 }
 
             let minesPlaced = 0;
-            while (minesPlaced < mines) {
-                let rx = Math.floor(Math.random() * cols);
-                let ry = Math.floor(Math.random() * rows);
+            while (minesPlaced < CONFIG.mines) {
+                let rx = Math.floor(Math.random() * CONFIG.cols);
+                let ry = Math.floor(Math.random() * CONFIG.rows);
 
-                // Не ставим мину прямо под палец
-                if (rx === safeX && ry === safeY) continue;
+                // Не ставим мину прямо в точку клика и её соседей (на всякий случай)
+                if (Math.abs(rx - safeX) <= 1 && Math.abs(ry - safeY) <= 1) continue;
 
                 if (!gameState.grid[ry][rx].isMine) {
                     gameState.grid[ry][rx].isMine = true;
@@ -265,24 +146,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // Считаем
-            calcNumbers();
+            // Считаем цифры
+            calculateNumbers();
 
-            // Проверка: клетка старта должна быть 0
+            // Проверка: точка старта должна быть 0
             if (gameState.grid[safeY][safeX].count === 0) {
                 success = true;
             }
             attempts++;
         }
-
-        // Если за 1000 попыток не вышло (очень плотное поле), оставляем как есть,
-        // но гарантируем, что под пальцем нет мины (это уже учтено выше)
     }
 
-    function calcNumbers() {
-        const { rows, cols } = gameState.config;
-        for (let y = 0; y < rows; y++) {
-            for (let x = 0; x < cols; x++) {
+    function calculateNumbers() {
+        for (let y = 0; y < CONFIG.rows; y++) {
+            for (let x = 0; x < CONFIG.cols; x++) {
                 if (!gameState.grid[y][x].isMine) {
                     gameState.grid[y][x].count = countMinesAround(x, y);
                 }
@@ -292,11 +169,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function countMinesAround(x, y) {
         let count = 0;
-        const { rows, cols } = gameState.config;
         for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
                 let ny = y + dy, nx = x + dx;
-                if (ny >= 0 && ny < rows && nx >= 0 && nx < cols) {
+                if (ny >= 0 && ny < CONFIG.rows && nx >= 0 && nx < CONFIG.cols) {
                     if (gameState.grid[ny][nx].isMine) count++;
                 }
             }
@@ -304,77 +180,50 @@ document.addEventListener('DOMContentLoaded', () => {
         return count;
     }
 
-    // --- RENDER ---
-    function renderGridDOM() {
-        ui.grid.innerHTML = '';
-        const { rows, cols } = gameState.config;
+    // === ТАЙМЕР ===
+    function startTimer() {
+        if (!gameState.startTime) gameState.startTime = Date.now();
 
-        ui.grid.style.gridTemplateColumns = `repeat(${cols}, 32px)`;
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            const now = Date.now();
+            const totalSeconds = gameState.elapsedTime + Math.floor((now - gameState.startTime) / 1000);
 
+            UI.timer.innerText = String(totalSeconds).padStart(3, '0');
+
+            // Автосейв раз в 2 секунды
+            if (totalSeconds % 2 === 0) StorageManager.saveState(gameState);
+        }, 1000);
+    }
+
+    function stopTimer() {
+        clearInterval(timerInterval);
+        if (gameState.startTime) {
+            gameState.elapsedTime += Math.floor((Date.now() - gameState.startTime) / 1000);
+            gameState.startTime = null;
+        }
+    }
+
+    function updateHeader() {
+        UI.minesCount.innerText = String(gameState.flags).padStart(3, '0');
+        const currentSec = gameState.elapsedTime; // Грубое отображение при загрузке
+        UI.timer.innerText = String(currentSec).padStart(3, '0');
+    }
+
+    // === РЕНДЕР И СОБЫТИЯ ===
+    function renderGrid() {
+        UI.grid.innerHTML = '';
         gameState.grid.forEach(row => {
             row.forEach(cell => {
                 const el = document.createElement('div');
                 el.className = 'cell';
                 el.dataset.x = cell.x;
                 el.dataset.y = cell.y;
-
-                // Touch/Mouse handlers
-                addInteractions(el, cell);
-                ui.grid.appendChild(el);
+                updateCellVisual(el, cell);
+                attachEvents(el, cell);
+                UI.grid.appendChild(el);
             });
         });
-    }
-
-    function addInteractions(el, cell) {
-        // Desktop Right Click
-        el.addEventListener('contextmenu', e => {
-            e.preventDefault();
-            toggleFlag(cell);
-        });
-
-        // Click / Touch logic
-        let touchTimer = null;
-        let isLongPress = false;
-
-        const startHandler = (e) => {
-            if (gameState.status !== 'playing') return;
-            isLongPress = false;
-
-            // Если долгий тап -> флаг
-            touchTimer = setTimeout(() => {
-                isLongPress = true;
-                haptic('medium');
-                toggleFlag(cell);
-            }, 400);
-        };
-
-        const endHandler = (e) => {
-            clearTimeout(touchTimer);
-            if (isLongPress) {
-                e.preventDefault();
-                return;
-            }
-
-            // Обычный клик
-            if (cell.isOpen) {
-                // CHORDING (Аккорд)
-                handleChord(cell);
-            } else {
-                openCell(cell);
-            }
-        };
-
-        // Mouse
-        el.addEventListener('mousedown', (e) => {
-            if (e.button === 0) startHandler(e);
-        });
-        el.addEventListener('mouseup', (e) => {
-            if (e.button === 0) endHandler(e);
-        });
-
-        // Touch
-        el.addEventListener('touchstart', startHandler, { passive: true });
-        el.addEventListener('touchend', endHandler);
     }
 
     function updateCellVisual(el, cell) {
@@ -387,8 +236,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 el.classList.add('mine');
                 el.innerText = '💣';
             } else if (cell.count > 0) {
-                el.classList.add(`val-${cell.count}`);
                 el.innerText = cell.count;
+                el.classList.add(`val-${cell.count}`);
             }
         } else {
             if (cell.isFlagged) {
@@ -398,126 +247,160 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function getCellEl(x, y) {
-        // Используем querySelector для надежности или id
-        // Оптимизация: можно хранить ссылки в матрице, но для 30x16 сойдет и так
-        return ui.grid.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
+    function attachEvents(el, cell) {
+        // ПК: Правый клик
+        el.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            toggleFlag(cell);
+        });
+
+        // Touch Logic (Long press)
+        let touchTimer = null;
+        let isLongPress = false;
+
+        const startTouch = (e) => {
+            if (gameState.status === 'won' || gameState.status === 'lost') return;
+            isLongPress = false;
+            touchTimer = setTimeout(() => {
+                isLongPress = true;
+                haptic('medium');
+                toggleFlag(cell);
+            }, 400); // 400ms для флага
+        };
+
+        const endTouch = (e) => {
+            clearTimeout(touchTimer);
+            if (isLongPress) {
+                if(e.cancelable) e.preventDefault();
+                return;
+            }
+            // Обычный клик
+            handleClick(cell);
+        };
+
+        el.addEventListener('touchstart', startTouch, { passive: true });
+        el.addEventListener('touchend', endTouch);
+        el.addEventListener('mousedown', (e) => {
+            if (e.button === 0) handleClick(cell);
+        });
     }
 
-    // --- ACTIONS ---
+    // === ОСНОВНАЯ ЛОГИКА КЛИКА ===
+    function handleClick(cell) {
+        if (gameState.status === 'won' || gameState.status === 'lost') return;
 
-    function toggleFlag(cell) {
-        if (cell.isOpen) return;
-
-        if (!cell.isFlagged) {
-            cell.isFlagged = true;
-            gameState.flagsPlaced++;
-        } else {
-            cell.isFlagged = false;
-            gameState.flagsPlaced--;
+        // Если ячейка открыта -> пробуем АККОРД (открытие соседей)
+        if (cell.isOpen) {
+            tryChord(cell);
+            return;
         }
 
-        updateHeader();
-        const el = getCellEl(cell.x, cell.y);
-        updateCellVisual(el, cell);
-        Storage.saveState();
+        // Если флаг -> ничего не делаем
+        if (cell.isFlagged) return;
+
+        // Первый ход
+        if (gameState.status === 'new') {
+            gameState.status = 'playing';
+            startTimer();
+            generateMines(cell.x, cell.y);
+            // После генерации состояние ячейки могло измениться, но координаты те же
+        }
+
+        openCell(cell);
     }
 
     function openCell(cell) {
         if (cell.isOpen || cell.isFlagged) return;
 
-        if (gameState.firstMove) {
-            gameState.firstMove = false;
-            gameState.startTime = Date.now();
-            startTimer();
-            generateMines(cell.x, cell.y);
-            // После генерации обновляем состояние текущей ячейки, т.к. она могла измениться
-        }
-
         cell.isOpen = true;
-        const el = getCellEl(cell.x, cell.y);
-        updateCellVisual(el, cell);
+        const el = document.querySelector(`.cell[data-x="${cell.x}"][data-y="${cell.y}"]`);
+        if(el) updateCellVisual(el, cell);
 
         if (cell.isMine) {
             gameOver(false);
         } else {
-            haptic('light');
             if (cell.count === 0) {
                 openNeighbors(cell.x, cell.y);
             }
             checkWin();
-            Storage.saveState();
+            StorageManager.saveState(gameState);
         }
     }
 
-    // РЕКУРСИВНОЕ ОТКРЫТИЕ (Flood Fill)
     function openNeighbors(x, y) {
-        const { rows, cols } = gameState.config;
         for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
                 let ny = y + dy, nx = x + dx;
-                if (ny >= 0 && ny < rows && nx >= 0 && nx < cols) {
+                if (ny >= 0 && ny < CONFIG.rows && nx >= 0 && nx < CONFIG.cols) {
                     const neighbor = gameState.grid[ny][nx];
-                    if (!neighbor.isOpen && !neighbor.isMine) {
-                        openCell(neighbor);
-                    }
+                    if (!neighbor.isOpen) openCell(neighbor);
                 }
             }
         }
     }
 
-    // CHORDING (АККОРД)
-    function handleChord(cell) {
+    // Логика "Аккорда" (Chording)
+    function tryChord(cell) {
         if (cell.count === 0) return;
 
-        // 1. Считаем флаги вокруг
-        let flagsAround = 0;
-        const { rows, cols } = gameState.config;
-
+        // Считаем флаги вокруг
+        let flags = 0;
         for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
                 let ny = cell.y + dy, nx = cell.x + dx;
-                if (ny >= 0 && ny < rows && nx >= 0 && nx < cols) {
-                    if (gameState.grid[ny][nx].isFlagged) flagsAround++;
+                if (ny >= 0 && ny < CONFIG.rows && nx >= 0 && nx < CONFIG.cols) {
+                    if (gameState.grid[ny][nx].isFlagged) flags++;
                 }
             }
         }
 
-        // 2. Если флагов столько же, сколько мин - открываем остальных
-        if (flagsAround === cell.count) {
-            let openedSomething = false;
+        // Если флагов хватает, открываем остальных соседей
+        if (flags === cell.count) {
+            let opened = false;
             for (let dy = -1; dy <= 1; dy++) {
                 for (let dx = -1; dx <= 1; dx++) {
                     let ny = cell.y + dy, nx = cell.x + dx;
-                    if (ny >= 0 && ny < rows && nx >= 0 && nx < cols) {
+                    if (ny >= 0 && ny < CONFIG.rows && nx >= 0 && nx < CONFIG.cols) {
                         const neighbor = gameState.grid[ny][nx];
                         if (!neighbor.isOpen && !neighbor.isFlagged) {
                             openCell(neighbor);
-                            openedSomething = true;
+                            opened = true;
                         }
                     }
                 }
             }
-            if (openedSomething) haptic('medium');
+            if (opened) haptic('light');
         } else {
-            // Визуальная подсказка (шейк или подсветка) - опционально
-            // Можно добавить легкую вибрацию "отказ"
-            haptic('error');
+            // Можно добавить анимацию тряски, если флагов не хватает
         }
     }
 
+    function toggleFlag(cell) {
+        if (gameState.status !== 'playing' && gameState.status !== 'new') return;
+        if (cell.isOpen) return;
+
+        if (!cell.isFlagged && gameState.flags > 0) {
+            cell.isFlagged = true;
+            gameState.flags--;
+        } else if (cell.isFlagged) {
+            cell.isFlagged = false;
+            gameState.flags++;
+        }
+
+        updateHeader();
+        const el = document.querySelector(`.cell[data-x="${cell.x}"][data-y="${cell.y}"]`);
+        if (el) updateCellVisual(el, cell);
+        StorageManager.saveState(gameState);
+    }
+
     function checkWin() {
-        if (gameState.status !== 'playing') return;
-
         let openCount = 0;
-        const { rows, cols, mines } = gameState.config;
-        const total = rows * cols;
-
-        gameState.grid.forEach(r => r.forEach(c => {
+        gameState.grid.forEach(row => row.forEach(c => {
             if (c.isOpen) openCount++;
         }));
 
-        if (openCount === total - mines) {
+        const totalCells = CONFIG.rows * CONFIG.cols;
+        if (openCount === totalCells - CONFIG.mines) {
             gameOver(true);
         }
     }
@@ -525,75 +408,37 @@ document.addEventListener('DOMContentLoaded', () => {
     function gameOver(win) {
         gameState.status = win ? 'won' : 'lost';
         stopTimer();
-        Storage.saveState(); // удалит стейт т.к. статус не playing
-
-        const finalTimeMs = gameState.elapsedTime;
+        StorageManager.clearState();
 
         if (win) {
-            ui.faceBtn.innerText = '😎';
+            UI.faceBtn.innerText = '😎';
             haptic('success');
-
-            const isRec = Storage.saveRecord(gameState.config.mode, finalTimeMs);
-            ui.resultTitle.innerText = isRec ? "Новый рекорд!" : "Победа!";
-            ui.resultTime.innerText = formatTime(finalTimeMs);
+            UI.resultTitle.innerText = "Победа!";
         } else {
-            ui.faceBtn.innerText = '😵';
+            UI.faceBtn.innerText = '😵';
             haptic('error');
-            ui.resultTitle.innerText = "Взрыв!";
-            ui.resultTime.innerText = formatTime(finalTimeMs);
+            UI.resultTitle.innerText = "Взрыв!";
 
-            // ПОКАЗАТЬ ВСЕ МИНЫ
-            gameState.grid.forEach(row => row.forEach(cell => {
-                const el = getCellEl(cell.x, cell.y);
-                if (cell.isMine && !cell.isFlagged) {
-                    cell.isOpen = true; // чтобы отрисовалась как открытая мина
+            // Показываем ВСЕ мины и ошибки
+            gameState.grid.forEach(row => row.forEach(c => {
+                const el = document.querySelector(`.cell[data-x="${c.x}"][data-y="${c.y}"]`);
+                if (!el) return;
+
+                if (c.isMine && !c.isFlagged) {
+                    c.isOpen = true; // Для визуализации
                     el.classList.add('open', 'mine');
                     el.innerText = '💣';
                 }
-                else if (!cell.isMine && cell.isFlagged) {
+                else if (!c.isMine && c.isFlagged) {
                     // Неверный флаг
                     el.classList.add('wrong-flag');
                 }
             }));
         }
 
-        // Показать оверлей через секунду
         setTimeout(() => {
-            ui.overlay.classList.add('visible');
+            UI.overlay.classList.add('visible');
         }, 1000);
-    }
-
-    // --- TIMER & UI ---
-    function startTimer() {
-        clearInterval(timerInterval);
-        timerInterval = setInterval(() => {
-            const now = Date.now();
-            const total = gameState.elapsedTime + (now - gameState.startTime);
-            ui.timer.innerText = formatTime(total, false);
-
-            // Сохраняем каждые 2 секунды на всякий случай
-            if (Math.floor(total / 1000) % 2 === 0) Storage.saveState();
-        }, 100);
-    }
-
-    function stopTimer() {
-        clearInterval(timerInterval);
-        if (gameState.status === 'playing' && gameState.startTime) {
-            gameState.elapsedTime += Date.now() - gameState.startTime;
-        }
-    }
-
-    function formatTime(ms, full = true) {
-        const totalSec = Math.floor(ms / 1000);
-        const m = Math.floor(totalSec / 60).toString().padStart(2, '0');
-        const s = (totalSec % 60).toString().padStart(2, '0');
-        const mil = Math.floor((ms % 1000) / 10).toString().padStart(2, '0');
-        return full ? `${m}:${s}:${mil}` : `${m}:${s}`;
-    }
-
-    function updateHeader() {
-        const left = gameState.config.mines - gameState.flagsPlaced;
-        ui.minesCounter.innerText = left.toString().padStart(3, '0');
     }
 
     init();
