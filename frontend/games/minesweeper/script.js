@@ -1,392 +1,324 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // === 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM ===
     const tg = window.Telegram.WebApp;
     tg.ready();
     if (tg.expand) tg.expand();
 
-    // Haptic feedback
-    function haptic(type) {
-        if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred(type);
+    function haptic(type = 'medium') {
+        if (tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
+            tg.HapticFeedback.impactOccurred(type);
+        }
     }
 
-    // === КОНФИГУРАЦИЯ ===
-    const PRESETS = {
-        beginner: { rows: 9, cols: 9, mines: 10 },
-        amateur: { rows: 16, cols: 16, mines: 40 },
-        expert: { rows: 16, cols: 30, mines: 99 }
-    };
-    const RECORDS_KEY = 'minesweeper_records_tg';
+    // === 2. ХРАНИЛИЩЕ (Синхронизация Рекордов) ===
+    const RECORDS_KEY = 'minesweeper_records_v2';
+    let cloudStorage = tg.CloudStorage && tg.isVersionAtLeast('6.9') ? tg.CloudStorage : null;
 
-    // === ЭЛЕМЕНТЫ UI ===
-    const UI = {
-        menu: document.getElementById('menu-screen'),
-        game: document.getElementById('game-screen'),
-        grid: document.getElementById('grid'),
-        overlay: document.getElementById('result-overlay'),
-        minesCount: document.getElementById('mines-count'),
-        timer: document.getElementById('timer'),
-        restartBtn: document.getElementById('restart-btn'),
-        backBtn: document.getElementById('back-to-menu-btn'),
-        resultTitle: document.getElementById('result-title'),
-        resultTime: document.getElementById('result-time'),
-        resultEmoji: document.getElementById('result-emoji'),
-        overlayRestart: document.getElementById('overlay-restart-btn'),
-        overlayMenu: document.getElementById('overlay-menu-btn'),
-        inputs: {
-            c: document.getElementById('custom-cols'),
-            r: document.getElementById('custom-rows'),
-            m: document.getElementById('custom-mines')
+    const StorageManager = {
+        records: {
+            beginner: null, // ms
+            amateur: null,
+            expert: null
+        },
+
+        loadRecords(callback) {
+            // 1. Local
+            try {
+                const s = localStorage.getItem(RECORDS_KEY);
+                if (s) this.records = JSON.parse(s);
+            } catch (e) {}
+
+            // 2. Cloud
+            if (cloudStorage) {
+                cloudStorage.getItem(RECORDS_KEY, (err, val) => {
+                    if (!err && val) {
+                        try {
+                            const cloudRecs = JSON.parse(val);
+                            // Merge: берем лучшее время
+                            ['beginner', 'amateur', 'expert'].forEach(mode => {
+                                if (cloudRecs[mode]) {
+                                    if (!this.records[mode] || cloudRecs[mode] < this.records[mode]) {
+                                        this.records[mode] = cloudRecs[mode];
+                                    }
+                                }
+                            });
+                            this.saveRecords(); // Sync back to local
+                        } catch (e) {}
+                    }
+                    if (callback) callback();
+                });
+            } else if (callback) {
+                callback();
+            }
+        },
+
+        saveRecord(mode, timeMs) {
+            if (!this.records[mode] || timeMs < this.records[mode]) {
+                this.records[mode] = timeMs;
+                const json = JSON.stringify(this.records);
+                try { localStorage.setItem(RECORDS_KEY, json); } catch (e) {}
+                if (cloudStorage) {
+                    cloudStorage.setItem(RECORDS_KEY, json, (err) => { if (err) console.error(err); });
+                }
+                return true; // Новый рекорд!
+            }
+            return false;
         }
     };
 
-    // === СОСТОЯНИЕ ИГРЫ ===
-    let state = {
-        config: {},
-        grid: [], // 2D массив
-        mode: null, // beginner, amateur, expert, custom
-        started: false,
-        over: false,
-        won: false,
-        startTime: 0,
-        timerInt: null,
-        flags: 0
+    // === 3. КОНФИГУРАЦИЯ И UI ===
+    const PRESETS = {
+        beginner: { rows: 9, cols: 9, mines: 10 },
+        amateur: { rows: 16, cols: 16, mines: 40 },
+        expert: { rows: 16, cols: 30, mines: 99 } // 30 в ширину
     };
 
-    // === ИНИЦИАЛИЗАЦИЯ ===
-    function init() {
-        updateMenuScores();
+    const UI = {
+        menuScreen: document.getElementById('menu-screen'),
+        gameScreen: document.getElementById('game-screen'),
+        grid: document.getElementById('grid'),
+        minesCount: document.getElementById('mines-count'),
+        timer: document.getElementById('timer'),
+        faceBtn: document.getElementById('restart-btn'),
+        backBtn: document.getElementById('back-to-menu-btn'),
+        overlay: document.getElementById('result-overlay'),
+        resultTitle: document.getElementById('result-title'),
+        resultTime: document.getElementById('result-time'),
+        overlayRestartBtn: document.getElementById('overlay-restart-btn'),
+        overlayMenuBtn: document.getElementById('overlay-menu-btn'),
+        inputs: {
+            cols: document.getElementById('custom-cols'),
+            rows: document.getElementById('custom-rows'),
+            mines: document.getElementById('custom-mines')
+        }
+    };
 
-        // Кнопки меню пресетов
+    let gameState = {
+        config: {},
+        currentMode: null, // 'beginner', 'amateur', 'expert', 'custom'
+        grid: [],
+        gameOver: false,
+        gameWon: false,
+        flags: 0,
+        firstMove: true,
+        startTime: null,
+        endTime: null,
+        timerInterval: null
+    };
+
+    // === 4. ИНИЦИАЛИЗАЦИЯ ===
+    function init() {
+        // Загрузка рекордов
+        StorageManager.loadRecords(updateMenuScores);
+
+        // Листенеры меню
         document.querySelectorAll('.preset-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                haptic('light');
-                startGame(btn.dataset.mode, PRESETS[btn.dataset.mode]);
+                const mode = btn.dataset.mode;
+                startGame(mode, PRESETS[mode]);
             });
         });
 
-        // Кнопка кастомной игры
-        document.getElementById('start-custom-btn').addEventListener('click', () => {
-            const cols = clamp(UI.inputs.c.value, 5, 30);
-            const rows = clamp(UI.inputs.r.value, 5, 30);
-            const maxMines = Math.floor(cols * rows * 0.85); // Макс 85% мин
-            const mines = clamp(UI.inputs.m.value, 1, maxMines);
+        document.getElementById('start-custom-btn').addEventListener('click', startCustomGame);
 
-            haptic('light');
-            startGame('custom', { cols, rows, mines });
+        // Листенеры игры
+        UI.faceBtn.addEventListener('click', restartGame);
+        UI.backBtn.addEventListener('click', showMenu);
+        UI.overlayRestartBtn.addEventListener('click', restartGame);
+        UI.overlayMenuBtn.addEventListener('click', showMenu);
+    }
+
+    function updateMenuScores() {
+        ['beginner', 'amateur', 'expert'].forEach(mode => {
+            const el = document.getElementById(`score-${mode}`);
+            if (StorageManager.records[mode]) {
+                el.innerText = formatTime(StorageManager.records[mode]);
+            } else {
+                el.innerText = '--:--';
+            }
         });
-
-        // Игровые кнопки
-        UI.restartBtn.onclick = () => { haptic('medium'); restartGame(); };
-        UI.overlayRestart.onclick = () => { haptic('medium'); restartGame(); };
-        UI.backBtn.onclick = () => { haptic('light'); showMenu(); };
-        UI.overlayMenu.onclick = () => { haptic('light'); showMenu(); };
     }
 
-    function clamp(val, min, max) {
-        return Math.min(Math.max(parseInt(val) || min, min), max);
+    function startCustomGame() {
+        let cols = parseInt(UI.inputs.cols.value) || 10;
+        let rows = parseInt(UI.inputs.rows.value) || 10;
+        let mines = parseInt(UI.inputs.mines.value) || 10;
+
+        // Валидация
+        cols = Math.min(99, Math.max(5, cols));
+        rows = Math.min(99, Math.max(5, rows));
+
+        const totalCells = cols * rows;
+        if (mines >= totalCells) mines = totalCells - 1;
+        if (mines < 1) mines = 1;
+
+        startGame('custom', { rows, cols, mines });
     }
 
-    // === ЛОГИКА ИГРЫ ===
-
+    // === 5. ЛОГИКА ИГРЫ ===
     function startGame(mode, config) {
-        state.mode = mode;
-        state.config = config;
-        UI.menu.classList.add('hidden');
-        UI.game.classList.remove('hidden');
+        gameState.currentMode = mode;
+        gameState.config = config;
+
+        UI.menuScreen.classList.add('hidden');
+        UI.gameScreen.classList.remove('hidden');
         UI.overlay.classList.add('hidden');
-        resetGame();
-    }
 
-    function resetGame() {
-        stopTimer();
-        state.started = false;
-        state.over = false;
-        state.won = false;
-        state.flags = 0;
-        UI.timer.innerText = '00:00';
-        UI.restartBtn.innerText = '🙂';
-
-        // Создаем пустую сетку для визуала
-        createEmptyGrid();
+        resetGameVariables();
+        renderGrid();
         updateHeader();
     }
 
     function restartGame() {
+        resetGameVariables();
         UI.overlay.classList.add('hidden');
-        resetGame();
+        renderGrid();
+        updateHeader();
     }
 
     function showMenu() {
         stopTimer();
-        UI.game.classList.add('hidden');
+        UI.gameScreen.classList.add('hidden');
         UI.overlay.classList.add('hidden');
-        UI.menu.classList.remove('hidden');
+        UI.menuScreen.classList.remove('hidden');
         updateMenuScores();
     }
 
+    function resetGameVariables() {
+        stopTimer();
+        gameState.gameOver = false;
+        gameState.gameWon = false;
+        gameState.firstMove = true;
+        gameState.flags = gameState.config.mines;
+        gameState.startTime = null;
+        gameState.grid = createEmptyGrid();
+        UI.faceBtn.innerText = '🙂';
+        UI.timer.innerText = '00:00';
+    }
+
     function createEmptyGrid() {
-        const { rows, cols } = state.config;
-        UI.grid.innerHTML = '';
-        UI.grid.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
-
-        state.grid = [];
-        for (let r = 0; r < rows; r++) {
+        let grid = [];
+        const { rows, cols } = gameState.config;
+        for (let y = 0; y < rows; y++) {
             let row = [];
-            for (let c = 0; c < cols; c++) {
-                let cell = { r, c, isMine: false, isOpen: false, isFlagged: false, val: 0 };
-                row.push(cell);
+            for (let x = 0; x < cols; x++) {
+                row.push({ x, y, isMine: false, isOpen: false, isFlagged: false, count: 0 });
+            }
+            grid.push(row);
+        }
+        return grid;
+    }
 
+    function generateMines(safeX, safeY) {
+        let minesPlaced = 0;
+        const { rows, cols, mines } = gameState.config;
+
+        while (minesPlaced < mines) {
+            let rx = Math.floor(Math.random() * cols);
+            let ry = Math.floor(Math.random() * rows);
+
+            if (!gameState.grid[ry][rx].isMine) {
+                // Защита первого хода (радиус 1)
+                if (Math.abs(rx - safeX) <= 1 && Math.abs(ry - safeY) <= 1) continue;
+
+                gameState.grid[ry][rx].isMine = true;
+                minesPlaced++;
+            }
+        }
+
+        // Подсчет соседей
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                if (!gameState.grid[y][x].isMine) {
+                    gameState.grid[y][x].count = countNeighbors(x, y);
+                }
+            }
+        }
+    }
+
+    function countNeighbors(x, y) {
+        let count = 0;
+        const { rows, cols } = gameState.config;
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                let ny = y + dy, nx = x + dx;
+                if (ny >= 0 && ny < rows && nx >= 0 && nx < cols) {
+                    if (gameState.grid[ny][nx].isMine) count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    // === 6. ТАЙМЕР (ms) ===
+    function startTimer() {
+        gameState.startTime = Date.now();
+        clearInterval(gameState.timerInterval);
+        gameState.timerInterval = setInterval(() => {
+            const delta = Date.now() - gameState.startTime;
+            UI.timer.innerText = formatTime(delta, false); // без ms для игры
+        }, 100); // обновление 10 раз в сек
+    }
+
+    function stopTimer() {
+        clearInterval(gameState.timerInterval);
+        if (gameState.startTime) {
+            gameState.endTime = Date.now() - gameState.startTime;
+        }
+    }
+
+    function formatTime(ms, showMs = true) {
+        if (!ms) return '00:00';
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        const msec = Math.floor((ms % 1000) / 10); // 2 digits
+
+        const strMin = String(minutes).padStart(2, '0');
+        const strSec = String(seconds).padStart(2, '0');
+
+        if (showMs) {
+            return `${strMin}:${strSec}:${String(msec).padStart(2, '0')}`;
+        }
+        return `${strMin}:${strSec}`;
+    }
+
+    function updateHeader() {
+        UI.minesCount.innerText = String(gameState.flags).padStart(3, '0');
+    }
+
+    // === 7. РЕНДЕРИНГ И УПРАВЛЕНИЕ ===
+    function renderGrid() {
+        UI.grid.innerHTML = '';
+        const { rows, cols } = gameState.config;
+
+        // CSS Grid динамически
+        UI.grid.style.gridTemplateColumns = `repeat(${cols}, 30px)`;
+
+        gameState.grid.forEach(row => {
+            row.forEach(cell => {
                 const el = document.createElement('div');
                 el.className = 'cell';
-                el.id = `c-${r}-${c}`;
+                el.dataset.x = cell.x;
+                el.dataset.y = cell.y;
 
-                // Обработчики
-                el.onclick = () => handleLeftClick(cell);
-                el.oncontextmenu = (e) => { e.preventDefault(); handleRightClick(cell); };
-
-                // Долгое нажатие для тача
-                let touchTimer;
-                el.ontouchstart = () => { touchTimer = setTimeout(() => { haptic('medium'); handleRightClick(cell); }, 400); };
-                el.ontouchend = () => clearTimeout(touchTimer);
-
+                attachEvents(el, cell);
                 UI.grid.appendChild(el);
-            }
-            state.grid.push(row);
-        }
-    }
-
-    // === NO GUESSING GENERATOR ===
-    // Генерирует поле, которое гарантированно решается без угадывания
-    function generateBoard(safeR, safeC) {
-        let attempts = 0;
-        let bestGrid = null;
-
-        while(attempts < 50) {
-            // 1. Создаем случайное поле
-            let grid = createBaseGridStructure();
-            placeMines(grid, safeR, safeC);
-            calcNumbers(grid);
-
-            // 2. Проверяем решаемость
-            if (isSolvable(grid, safeR, safeC)) {
-                return grid;
-            }
-            attempts++;
-        }
-
-        // Если не вышло (редко), возвращаем последнее сгенерированное
-        let fallback = createBaseGridStructure();
-        placeMines(fallback, safeR, safeC);
-        calcNumbers(fallback);
-        return fallback;
-    }
-
-    function createBaseGridStructure() {
-        const { rows, cols } = state.config;
-        return Array.from({length: rows}, (_, r) =>
-            Array.from({length: cols}, (_, c) => ({
-                r, c, isMine: false, isOpen: false, isFlagged: false, val: 0
-            }))
-        );
-    }
-
-    function placeMines(grid, safeR, safeC) {
-        const { rows, cols, mines } = state.config;
-        let placed = 0;
-        while(placed < mines) {
-            let r = Math.floor(Math.random() * rows);
-            let c = Math.floor(Math.random() * cols);
-            // Гарантируем безопасную зону вокруг первого клика
-            if (Math.abs(r - safeR) <= 1 && Math.abs(c - safeC) <= 1) continue;
-            if (!grid[r][c].isMine) {
-                grid[r][c].isMine = true;
-                placed++;
-            }
-        }
-    }
-
-    function calcNumbers(grid) {
-        const rows = grid.length, cols = grid[0].length;
-        grid.forEach(row => row.forEach(cell => {
-            if (!cell.isMine) {
-                cell.val = getNeighbors(grid, cell.r, cell.c).filter(n => n.isMine).length;
-            }
-        }));
-    }
-
-    // Простой солвер для проверки решаемости
-    function isSolvable(grid, startR, startC) {
-        let simGrid = grid.map(row => row.map(c => ({...c}))); // Клон
-        let changed = true;
-
-        // Открываем старт
-        openSim(simGrid, startR, startC);
-
-        while(changed) {
-            changed = false;
-            for(let r=0; r<simGrid.length; r++) {
-                for(let c=0; c<simGrid[0].length; c++) {
-                    let cell = simGrid[r][c];
-                    if(cell.isOpen && cell.val > 0) {
-                        let neighbors = getNeighbors(simGrid, r, c);
-                        let hidden = neighbors.filter(n => !n.isOpen);
-                        let flagged = neighbors.filter(n => n.isFlagged);
-
-                        // 1. Все соседи - мины
-                        if(hidden.length > 0 && hidden.length === cell.val - flagged.length) {
-                            hidden.forEach(n => { if(!n.isFlagged) { n.isFlagged = true; changed = true; } });
-                        }
-                        // 2. Все мины найдены, остальные безопасны
-                        if(flagged.length === cell.val && hidden.length > flagged.length) {
-                            hidden.forEach(n => { if(!n.isFlagged && !n.isOpen) { openSim(simGrid, n.r, n.c); changed = true; } });
-                        }
-                    }
-                }
-            }
-        }
-
-        // Проверка: остались ли закрытые не-мины?
-        return !simGrid.some(row => row.some(c => !c.isMine && !c.isOpen));
-    }
-
-    function openSim(grid, r, c) {
-        if(grid[r][c].isOpen || grid[r][c].isFlagged) return;
-        grid[r][c].isOpen = true;
-        if(grid[r][c].val === 0) {
-            getNeighbors(grid, r, c).forEach(n => openSim(grid, n.r, n.c));
-        }
-    }
-
-    // === ГЕЙМПЛЕЙ ===
-
-    function handleLeftClick(cell) {
-        if (state.over || state.won || cell.isFlagged) return;
-
-        // Первый клик
-        if (!state.started) {
-            state.started = true;
-            startTimer();
-            // Генерируем поле и заменяем стейт
-            state.grid = generateBoard(cell.r, cell.c);
-        }
-
-        // Получаем актуальную ячейку (после генерации ссылка могла измениться)
-        const activeCell = state.grid[cell.r][cell.c];
-
-        // Аккорд (если уже открыта)
-        if (activeCell.isOpen) {
-            tryChord(activeCell);
-            return;
-        }
-
-        openCell(activeCell);
-    }
-
-    function handleRightClick(cell) {
-        if (!state.started || state.over || cell.isOpen) return;
-        const activeCell = state.grid[cell.r][cell.c];
-
-        activeCell.isFlagged = !activeCell.isFlagged;
-        state.flags += activeCell.isFlagged ? 1 : -1;
-
-        updateVisual(activeCell);
-        updateHeader();
-        haptic('selection');
-    }
-
-    function tryChord(cell) {
-        if (cell.val === 0) return;
-        const neighbors = getNeighbors(state.grid, cell.r, cell.c);
-        const flags = neighbors.filter(n => n.isFlagged).length;
-
-        if (flags === cell.val) {
-            let triggered = false;
-            neighbors.forEach(n => {
-                if (!n.isOpen && !n.isFlagged) {
-                    openCell(n);
-                    triggered = true;
-                }
             });
-            if(triggered) haptic('light');
-        }
+        });
     }
 
-    function openCell(cell) {
-        if (cell.isOpen || cell.isFlagged) return;
-
-        cell.isOpen = true;
-        updateVisual(cell);
-
-        if (cell.isMine) {
-            gameOver(false);
-            return;
-        }
-
-        if (cell.val === 0) {
-            getNeighbors(state.grid, cell.r, cell.c).forEach(n => openCell(n));
-        }
-
-        checkWin();
-    }
-
-    function checkWin() {
-        const { rows, cols, mines } = state.config;
-        let opened = 0;
-        state.grid.forEach(r => r.forEach(c => { if(c.isOpen) opened++; }));
-
-        if (opened === (rows * cols - mines)) {
-            gameOver(true);
-        }
-    }
-
-    function gameOver(win) {
-        state.over = true;
-        state.won = win;
-        stopTimer();
-
-        if (win) {
-            UI.restartBtn.innerText = '😎';
-            UI.resultEmoji.innerText = '😎';
-            UI.resultTitle.innerText = 'Победа!';
-            haptic('success');
-            saveRecord();
-        } else {
-            UI.restartBtn.innerText = '😵';
-            UI.resultEmoji.innerText = '💥';
-            UI.resultTitle.innerText = 'Взрыв!';
-            haptic('error');
-            // Показываем мины
-            state.grid.forEach(r => r.forEach(c => {
-                if (c.isMine && !c.isFlagged) {
-                    c.isOpen = true;
-                    updateVisual(c);
-                } else if (!c.isMine && c.isFlagged) {
-                    const el = document.getElementById(`c-${c.r}-${c.c}`);
-                    if(el) el.classList.add('wrong-flag');
-                }
-            }));
-        }
-
-        UI.resultTime.innerText = UI.timer.innerText;
-        setTimeout(() => UI.overlay.classList.remove('hidden'), 1000);
-    }
-
-    // === ВИЗУАЛ ===
-
-    function updateVisual(cell) {
-        const el = document.getElementById(`c-${cell.r}-${cell.c}`);
-        if (!el) return;
-
+    function updateCellVisual(el, cell) {
         el.className = 'cell';
         el.innerText = '';
-
         if (cell.isOpen) {
             el.classList.add('open');
             if (cell.isMine) {
                 el.classList.add('mine');
                 el.innerText = '💣';
-            } else if (cell.val > 0) {
-                el.innerText = cell.val;
-                el.classList.add(`val-${cell.val}`);
+            } else if (cell.count > 0) {
+                el.innerText = cell.count;
+                el.classList.add(`val-${cell.count}`);
             }
         } else if (cell.isFlagged) {
             el.classList.add('flagged');
@@ -394,62 +326,160 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function updateHeader() {
-        UI.minesCount.innerText = state.config.mines - state.flags;
+    function attachEvents(el, cell) {
+        // Desktop
+        el.addEventListener('mousedown', (e) => {
+            if (e.button === 0) handleInteraction(cell, 'click');
+            if (e.button === 2) { e.preventDefault(); toggleFlag(cell); }
+        });
+        el.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Mobile Touch
+        let touchTimer = null;
+        let startX, startY;
+        let isDrag = false;
+
+        el.addEventListener('touchstart', (e) => {
+            if (gameState.gameOver) return;
+            isDrag = false;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+
+            touchTimer = setTimeout(() => {
+                if (!isDrag) {
+                    haptic('medium');
+                    toggleFlag(cell);
+                    isDrag = true; // чтобы не сработал click при touchend
+                }
+            }, 400); // 400ms hold
+        }, { passive: false });
+
+        el.addEventListener('touchmove', (e) => {
+            // Если палец сдвинулся значительно, это скролл
+            const x = e.touches[0].clientX;
+            const y = e.touches[0].clientY;
+            if (Math.abs(x - startX) > 10 || Math.abs(y - startY) > 10) {
+                clearTimeout(touchTimer);
+                isDrag = true;
+            }
+        });
+
+        el.addEventListener('touchend', (e) => {
+            clearTimeout(touchTimer);
+            if (!isDrag) {
+                e.preventDefault(); // отменяем эмуляцию мыши
+                handleInteraction(cell, 'click');
+            }
+        });
     }
 
-    function getNeighbors(grid, r, c) {
-        let res = [];
-        for(let dr=-1; dr<=1; dr++) {
-            for(let dc=-1; dc<=1; dc++) {
-                if(dr==0 && dc==0) continue;
-                let nr = r+dr, nc = c+dc;
-                if(nr>=0 && nr<grid.length && nc>=0 && nc<grid[0].length) {
-                    res.push(grid[nr][nc]);
+    function handleInteraction(cell, type) {
+        if (gameState.gameOver || gameState.gameWon) return;
+        if (type === 'click') openCell(cell.x, cell.y);
+    }
+
+    function toggleFlag(cell) {
+        if (gameState.gameOver || cell.isOpen) return;
+
+        if (!cell.isFlagged && gameState.flags > 0) {
+            cell.isFlagged = true;
+            gameState.flags--;
+        } else if (cell.isFlagged) {
+            cell.isFlagged = false;
+            gameState.flags++;
+        }
+
+        const el = getEl(cell.x, cell.y);
+        if (el) updateCellVisual(el, cell);
+        updateHeader();
+    }
+
+    function openCell(x, y) {
+        const cell = gameState.grid[y][x];
+        if (cell.isOpen || cell.isFlagged) return;
+
+        if (gameState.firstMove) {
+            gameState.firstMove = false;
+            generateMines(x, y);
+            startTimer();
+        }
+
+        cell.isOpen = true;
+        const el = getEl(x, y);
+        if (el) updateCellVisual(el, cell);
+
+        if (cell.isMine) {
+            gameOver(false);
+        } else {
+            if (cell.count === 0) floodFill(x, y);
+            checkWin();
+        }
+    }
+
+    function floodFill(x, y) {
+        const { rows, cols } = gameState.config;
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                let ny = y + dy, nx = x + dx;
+                if (ny >= 0 && ny < rows && nx >= 0 && nx < cols) {
+                    const neighbor = gameState.grid[ny][nx];
+                    if (!neighbor.isOpen && !neighbor.isMine) {
+                        openCell(nx, ny);
+                    }
                 }
             }
         }
-        return res;
     }
 
-    // === ТАЙМЕР И РЕКОРДЫ ===
+    function checkWin() {
+        let openCount = 0;
+        gameState.grid.forEach(row => row.forEach(c => { if(c.isOpen) openCount++; }));
 
-    function startTimer() {
-        state.startTime = Date.now();
-        state.timerInt = setInterval(() => {
-            let delta = Math.floor((Date.now() - state.startTime)/1000);
-            let m = Math.floor(delta/60).toString().padStart(2,'0');
-            let s = (delta%60).toString().padStart(2,'0');
-            UI.timer.innerText = `${m}:${s}`;
-        }, 1000);
-    }
-
-    function stopTimer() {
-        clearInterval(state.timerInt);
-    }
-
-    function saveRecord() {
-        if (state.mode === 'custom') return;
-        let time = Date.now() - state.startTime;
-        let recs = JSON.parse(localStorage.getItem(RECORDS_KEY) || '{}');
-        if (!recs[state.mode] || time < recs[state.mode]) {
-            recs[state.mode] = time;
-            localStorage.setItem(RECORDS_KEY, JSON.stringify(recs));
-            updateMenuScores();
+        const total = gameState.config.rows * gameState.config.cols;
+        if (openCount === total - gameState.config.mines) {
+            gameOver(true);
         }
     }
 
-    function updateMenuScores() {
-        let recs = JSON.parse(localStorage.getItem(RECORDS_KEY) || '{}');
-        ['beginner', 'amateur', 'expert'].forEach(m => {
-            const el = document.getElementById(`score-${m}`);
-            if (recs[m]) {
-                let d = Math.floor(recs[m]/1000);
-                el.innerText = `${Math.floor(d/60).toString().padStart(2,'0')}:${(d%60).toString().padStart(2,'0')}`;
-            } else {
-                el.innerText = '--:--';
+    function gameOver(win) {
+        gameState.gameOver = true;
+        gameState.gameWon = win;
+        stopTimer();
+
+        if (win) {
+            UI.faceBtn.innerText = '😎';
+            haptic('success');
+            const finalTime = gameState.endTime;
+            let isRecord = false;
+
+            // Проверка рекорда только для пресетов
+            if (['beginner', 'amateur', 'expert'].includes(gameState.currentMode)) {
+                isRecord = StorageManager.saveRecord(gameState.currentMode, finalTime);
             }
-        });
+
+            UI.resultTitle.innerText = isRecord ? "НОВЫЙ РЕКОРД!" : "ПОБЕДА!";
+            UI.resultTime.innerText = formatTime(finalTime);
+        } else {
+            UI.faceBtn.innerText = '😵';
+            haptic('error');
+            UI.resultTitle.innerText = "ВЗРЫВ!";
+            UI.resultTime.innerText = "--:--:--";
+
+            // Показать мины
+            gameState.grid.forEach(row => row.forEach(c => {
+                if (c.isMine) {
+                    c.isOpen = true;
+                    const el = getEl(c.x, c.y);
+                    if (el) updateCellVisual(el, c);
+                }
+            }));
+        }
+
+        setTimeout(() => UI.overlay.classList.remove('hidden'), 1000);
+    }
+
+    function getEl(x, y) {
+        return document.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
     }
 
     init();
