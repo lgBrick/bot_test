@@ -9,7 +9,7 @@
 </head>
 <body>
 
-    <!-- Фоновые декоративные элементы (опционально, для красоты) -->
+    <!-- Фоновые декоративные элементы -->
     <div class="ambient-light"></div>
 
     <!-- Основной экран -->
@@ -43,7 +43,12 @@
                 <!-- JS добавит игры -->
             </div>
 
-            <!-- Пустое пространство внизу, чтобы контент не перекрывался баром iOS -->
+            <!-- Кнопка сброса прогресса -->
+            <div class="reset-section">
+                <button id="open-reset-btn" class="danger-btn">Сбросить прогресс</button>
+            </div>
+
+            <!-- Пустое пространство внизу -->
             <div class="spacer"></div>
         </div>
     </div>
@@ -54,6 +59,28 @@
             <div class="spinner"></div>
         </div>
         <div id="game-content"></div>
+    </div>
+
+    <!-- Модальное окно сброса -->
+    <div id="reset-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 class="modal-title">Сброс данных</h3>
+            <p class="modal-subtitle">Выберите игры для удаления сохранений</p>
+
+            <div class="modal-controls">
+                <button id="select-all-btn" class="text-btn">Выбрать все</button>
+                <button id="deselect-all-btn" class="text-btn">Снять все</button>
+            </div>
+
+            <div class="games-list-checkbox" id="reset-games-list">
+                <!-- JS наполнит этот список -->
+            </div>
+
+            <div class="modal-actions">
+                <button id="cancel-reset-btn" class="secondary-btn">Отмена</button>
+                <button id="confirm-reset-btn" class="primary-danger-btn">Удалить</button>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>

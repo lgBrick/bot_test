@@ -1,54 +1,53 @@
 document.addEventListener("DOMContentLoaded", () => {
-    // Оборачиваем в try-catch для отлова ошибок на телефоне
     try {
         const tg = window.Telegram.WebApp;
 
-        // Раскрываем приложение на весь экран
         if (tg.expand) {
             tg.expand();
         }
 
-        // --- УБРАНО: tg.enableClosingConfirmation() ---
-        // Теперь уведомление при закрытии появляться не будет.
-
         // --- СПИСОК КАТЕГОРИЙ ---
-        // Добавьте сюда любые категории, которые хотите видеть в меню
         const CATEGORIES = ["Все", "Популярное", "Головоломки", "Аркады", "Новые"];
 
         // --- СПИСОК ИГР ---
-        // В поле 'categories' перечисляем через запятую, куда относится игра
+        // Добавлено поле storageKeys: [] для очистки прогресса
         const games = [
             {
                 id: 1,
                 title: "2048",
                 categories: ["Головоломки", "Популярное", "Классика"],
                 icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
-                url: "games/2048/index.html"
+                url: "games/2048/index.html",
+                storageKeys: ['bestScore', 'gameState'] // Примерные ключи для стандартной 2048
             },
             {
                 id: 2,
                 title: "Hextris",
                 categories: ["Аркады", "Сложные", "Новые"],
                 icon: "https://hextris.io/images/touch-icon-iphone-retina.png",
-                url: "games/hextris/index.html"
+                url: "games/hextris/index.html",
+                storageKeys: ['hextris-highscore'] // Пример для Hextris
             },
             {
                 id: 3,
                 title: "Minesweeper",
                 categories: ["Головоломки", "Классика"],
                 icon: "https://img.icons8.com/emoji/48/bomb-emoji.png",
-                url: "games/minesweeper/index.html"
+                url: "games/minesweeper/index.html",
+                storageKeys: ['minesweeper-score']
             },
             {
                 id: 4,
                 title: "2048 (моя игра)",
                 categories: ["Новые", "Головоломки"],
                 icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
-                url: "games/2048v2/index.html"
+                url: "games/2048v2/index.html",
+                // Здесь указываем ключи, которые мы прописали в коде самой игры
+                storageKeys: ['2048_best_score_v1', '2048_game_state_v1']
             }
         ];
 
-        // --- ПОЛУЧЕНИЕ ЭЛЕМЕНТОВ DOM ---
+        // --- DOM ЭЛЕМЕНТЫ ---
         const gamesContainer = document.getElementById("games-container");
         const searchInput = document.getElementById("search-input");
         const categoriesContainer = document.getElementById("categories-container");
@@ -57,17 +56,24 @@ document.addEventListener("DOMContentLoaded", () => {
         const gameContent = document.getElementById("game-content");
         const gameLoader = document.getElementById("game-loader");
 
+        // Элементы для сброса
+        const openResetBtn = document.getElementById("open-reset-btn");
+        const resetModal = document.getElementById("reset-modal");
+        const resetGamesList = document.getElementById("reset-games-list");
+        const selectAllBtn = document.getElementById("select-all-btn");
+        const deselectAllBtn = document.getElementById("deselect-all-btn");
+        const cancelResetBtn = document.getElementById("cancel-reset-btn");
+        const confirmResetBtn = document.getElementById("confirm-reset-btn");
+
         let activeCategory = "Все";
 
-        // --- ФУНКЦИЯ ВИБРАЦИИ (БЕЗОПАСНАЯ) ---
         function triggerHaptic(type) {
-            // Проверяем, поддерживает ли телефон вибрацию, чтобы не было ошибки
             if (tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                 tg.HapticFeedback.impactOccurred(type);
             }
         }
 
-        // --- ОТРИСОВКА КАТЕГОРИЙ ---
+        // --- РЕНДЕР КАТЕГОРИЙ ---
         function renderCategories() {
             if (!categoriesContainer) return;
             categoriesContainer.innerHTML = "";
@@ -78,14 +84,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 chip.innerText = cat;
 
                 chip.addEventListener("click", () => {
-                    triggerHaptic('light'); // Легкая вибрация
-
-                    // Переключаем активный класс
+                    triggerHaptic('light');
                     document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
                     chip.classList.add('active');
-
                     activeCategory = cat;
-                    // Перерисовываем игры с учетом поиска и новой категории
                     renderGames(searchInput ? searchInput.value : "");
                 });
 
@@ -93,28 +95,20 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
 
-        // --- ОТРИСОВКА ИГР ---
+        // --- РЕНДЕР ИГР ---
         function renderGames(filterText = "") {
             if (!gamesContainer) return;
             gamesContainer.innerHTML = "";
 
             const filtered = games.filter(game => {
-                // 1. Фильтр по названию
                 const matchesSearch = game.title.toLowerCase().includes(filterText.toLowerCase());
-
-                // 2. Фильтр по категориям (множественный выбор)
-                // Если "Все" - показываем всё. Иначе проверяем, есть ли выбранная категория в массиве игры.
                 const matchesCategory = activeCategory === "Все" || (game.categories && game.categories.includes(activeCategory));
-
                 return matchesSearch && matchesCategory;
             });
 
-            // Создаем карточки
             filtered.forEach((game, index) => {
                 const card = document.createElement("div");
                 card.className = "game-card";
-
-                // Добавляем плавную анимацию появления каскадом
                 card.style.animation = `fadeIn 0.4s ease-out ${index * 0.05}s both`;
 
                 card.innerHTML = `
@@ -126,67 +120,134 @@ document.addEventListener("DOMContentLoaded", () => {
                 gamesContainer.appendChild(card);
             });
 
-            // Если ничего не нашли
             if (filtered.length === 0) {
                 gamesContainer.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--tg-theme-hint-color); padding: 20px; font-size: 14px;">В этой категории пока пусто</div>`;
             }
         }
 
-        // --- ЗАПУСК ИГРЫ ---
         function openGame(game) {
-            triggerHaptic('medium'); // Средняя вибрация
-
+            triggerHaptic('medium');
             if (mainScreen) mainScreen.style.display = "none";
             if (gameScreen) gameScreen.style.display = "flex";
-            if (gameLoader) gameLoader.style.display = "block"; // Показываем спиннер загрузки
-
-            // Показываем нативную кнопку "Назад"
+            if (gameLoader) gameLoader.style.display = "block";
             if (tg.BackButton) tg.BackButton.show();
 
             if (game.url && gameContent) {
                 const iframe = document.createElement('iframe');
-                // Добавляем timestamp, чтобы браузер не кешировал старую версию игры
                 iframe.src = `${game.url}?v=${Date.now()}`;
-
-                // Стили для iframe
                 iframe.style.width = "100%";
                 iframe.style.height = "100%";
                 iframe.style.border = "none";
                 iframe.allow = "autoplay; fullscreen; vibration; gyroscope; accelerometer";
-
-                // Когда игра загрузилась — убираем спиннер
                 iframe.onload = () => {
                     if (gameLoader) gameLoader.style.display = "none";
                 };
-
-                gameContent.innerHTML = ""; // Очищаем старое
+                gameContent.innerHTML = "";
                 gameContent.appendChild(iframe);
             }
         }
 
-        // --- ОБРАБОТКА КНОПКИ "НАЗАД" ---
         if (tg.BackButton) {
             tg.BackButton.onClick(() => {
                 triggerHaptic('light');
-
                 if (gameScreen) gameScreen.style.display = "none";
                 if (mainScreen) mainScreen.style.display = "block";
-
-                // Важно: очищаем iframe, чтобы остановить звуки и скрипты игры
                 if (gameContent) gameContent.innerHTML = "";
-
                 tg.BackButton.hide();
             });
         }
 
-        // --- ЖИВОЙ ПОИСК ---
         if (searchInput) {
             searchInput.addEventListener("input", (e) => {
                 renderGames(e.target.value);
             });
         }
 
-        // --- ДОБАВЛЕНИЕ CSS АНИМАЦИИ ---
+        // --- ЛОГИКА СБРОСА ПРОГРЕССА ---
+
+        // Открытие модального окна
+        openResetBtn.addEventListener('click', () => {
+            triggerHaptic('medium');
+            renderResetList();
+            resetModal.classList.remove('hidden');
+        });
+
+        // Закрытие модального окна
+        cancelResetBtn.addEventListener('click', () => {
+            resetModal.classList.add('hidden');
+        });
+
+        // Рендер списка чекбоксов
+        function renderResetList() {
+            resetGamesList.innerHTML = '';
+            games.forEach(game => {
+                if (!game.storageKeys || game.storageKeys.length === 0) return;
+
+                const label = document.createElement('label');
+                label.className = 'checkbox-item';
+                label.innerHTML = `
+                    <input type="checkbox" value="${game.id}">
+                    <span>${game.title}</span>
+                `;
+                resetGamesList.appendChild(label);
+            });
+        }
+
+        // Кнопки "Выбрать все" / "Снять все"
+        selectAllBtn.addEventListener('click', () => {
+            document.querySelectorAll('#reset-games-list input[type="checkbox"]').forEach(cb => cb.checked = true);
+        });
+        deselectAllBtn.addEventListener('click', () => {
+            document.querySelectorAll('#reset-games-list input[type="checkbox"]').forEach(cb => cb.checked = false);
+        });
+
+        // Основная логика удаления
+        confirmResetBtn.addEventListener('click', () => {
+            triggerHaptic('heavy');
+
+            const selectedIds = Array.from(document.querySelectorAll('#reset-games-list input[type="checkbox"]:checked'))
+                .map(cb => parseInt(cb.value));
+
+            if (selectedIds.length === 0) {
+                resetModal.classList.add('hidden');
+                return;
+            }
+
+            // Находим выбранные игры
+            const selectedGames = games.filter(g => selectedIds.includes(g.id));
+
+            // Массив промисов для отслеживания удаления из Cloud
+            const cloudPromises = [];
+
+            selectedGames.forEach(game => {
+                if (game.storageKeys) {
+                    game.storageKeys.forEach(key => {
+                        // 1. Удаляем из LocalStorage браузера
+                        localStorage.removeItem(key);
+
+                        // 2. Удаляем из CloudStorage Телеграма (если доступен)
+                        if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
+                            const p = new Promise((resolve) => {
+                                tg.CloudStorage.removeItem(key, (err, result) => {
+                                    // Игнорируем ошибки, просто резолвим, чтобы не висеть
+                                    resolve();
+                                });
+                            });
+                            cloudPromises.push(p);
+                        }
+                    });
+                }
+            });
+
+            // Ждем завершения всех операций с облаком (или сразу закрываем, если нет облака)
+            Promise.all(cloudPromises).then(() => {
+                tg.showAlert(`Прогресс сброшен для ${selectedGames.length} игр(ы).`);
+                resetModal.classList.add('hidden');
+            });
+        });
+
+
+        // --- СТИЛИ АНИМАЦИИ ---
         const styleSheet = document.createElement("style");
         styleSheet.innerText = `
         @keyframes fadeIn {
@@ -195,12 +256,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }`;
         document.head.appendChild(styleSheet);
 
-        // --- ПЕРВЫЙ ЗАПУСК ---
+        // --- СТАРТ ---
         renderCategories();
         renderGames();
 
     } catch (error) {
-        // Если всё же произошла критическая ошибка, покажем её на экране
         console.error(error);
         const errDiv = document.createElement('div');
         errDiv.style.cssText = "color: red; padding: 20px; background: white; position: fixed; top: 0; left: 0; z-index: 9999;";

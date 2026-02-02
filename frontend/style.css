@@ -5,6 +5,7 @@
     --tg-theme-hint-color: #8e8e93;
     --tg-theme-button-color: #3390ec;
     --tg-theme-button-text-color: #ffffff;
+    --tg-theme-destructive-text-color: #ff3b30;
 
     /* Кастомные переменные для дизайна */
     --card-radius: 20px;
@@ -32,8 +33,8 @@ body {
     top: 0;
     left: 0;
     right: 0;
-    background: var(--tg-theme-bg-color); /* Fallback */
-    background: rgba(var(--tg-theme-bg-color-rgb, 255, 255, 255), 0.85); /* Если бы мы парсили RGB, но пока просто bg */
+    background: var(--tg-theme-bg-color);
+    background: rgba(var(--tg-theme-bg-color-rgb, 255, 255, 255), 0.85);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     z-index: 100;
@@ -93,7 +94,7 @@ body {
     gap: 8px;
     padding: 0 16px;
     overflow-x: auto;
-    scrollbar-width: none; /* Firefox */
+    scrollbar-width: none;
 }
 .categories-scroll::-webkit-scrollbar { display: none; }
 
@@ -117,7 +118,7 @@ body {
 
 /* === CONTENT LAYOUT === */
 .scroll-content {
-    padding-top: 155px; /* Отступ под хедер */
+    padding-top: 155px;
     padding-left: 16px;
     padding-right: 16px;
 }
@@ -132,9 +133,9 @@ body {
 /* === GAMES GRID === */
 .games-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); /* Адаптивная сетка */
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     gap: 16px;
-    padding-bottom: 40px;
+    padding-bottom: 30px;
 }
 
 .game-card {
@@ -146,7 +147,6 @@ body {
     transition: transform 0.15s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-/* Анимация нажатия */
 .game-card:active {
     transform: scale(0.92);
 }
@@ -162,13 +162,12 @@ body {
     overflow: hidden;
 }
 
-/* Эффект блика на иконке */
 .game-icon::after {
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     border-radius: var(--card-radius);
-    border: 1px solid rgba(0,0,0,0.05); /* Тонкая рамка */
+    border: 1px solid rgba(0,0,0,0.05);
 }
 
 .game-title {
@@ -201,7 +200,6 @@ body {
     height: 100%;
 }
 
-/* Лоадер игры */
 #game-loader {
     position: absolute;
     top: 50%; left: 50%;
@@ -218,12 +216,125 @@ body {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Темная тема (адаптация если TG в темном режиме) */
+/* === RESET SECTION & MODAL === */
+.reset-section {
+    padding: 20px 0;
+    text-align: center;
+}
+
+.danger-btn {
+    background: transparent;
+    border: 1px solid var(--tg-theme-destructive-text-color);
+    color: var(--tg-theme-destructive-text-color);
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.2s;
+}
+
+.danger-btn:active {
+    background: var(--tg-theme-destructive-text-color);
+    color: #fff;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(5px);
+    z-index: 1000;
+    display: flex;
+    align-items: center; /* Центр по вертикали */
+    justify-content: center;
+    opacity: 1;
+    transition: opacity 0.3s;
+}
+
+.modal-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.modal-content {
+    background: var(--tg-theme-bg-color);
+    width: 90%;
+    max-width: 350px;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    max-height: 80vh;
+}
+
+.modal-title { margin: 0 0 5px; font-size: 18px; text-align: center; }
+.modal-subtitle { margin: 0 0 15px; font-size: 13px; color: var(--tg-theme-hint-color); text-align: center; }
+
+.modal-controls {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.text-btn {
+    background: none; border: none;
+    color: var(--tg-theme-button-color);
+    font-size: 13px; font-weight: 500;
+    cursor: pointer; padding: 5px;
+}
+
+.games-list-checkbox {
+    overflow-y: auto;
+    flex: 1;
+    margin-bottom: 20px;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 0;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(0,0,0,0.03);
+}
+.checkbox-item:last-child { border-bottom: none; }
+
+.checkbox-item input {
+    margin-right: 12px;
+    width: 20px; height: 20px;
+    accent-color: var(--tg-theme-button-color);
+}
+
+.modal-actions {
+    display: flex; gap: 10px;
+}
+
+.secondary-btn, .primary-danger-btn {
+    flex: 1;
+    border: none;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer;
+}
+
+.secondary-btn {
+    background: var(--tg-theme-secondary-bg-color);
+    color: var(--tg-theme-text-color);
+}
+
+.primary-danger-btn {
+    background: var(--tg-theme-destructive-text-color);
+    color: white;
+}
+
 @media (prefers-color-scheme: dark) {
-    .sticky-header {
-        border-bottom: 1px solid rgba(255,255,255,0.1);
-    }
-    .game-icon::after {
-        border: 1px solid rgba(255,255,255,0.1);
-    }
+    .sticky-header { border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .game-icon::after { border: 1px solid rgba(255,255,255,0.1); }
+    .games-list-checkbox { border-color: rgba(255,255,255,0.1); }
+    .checkbox-item { border-bottom: 1px solid rgba(255,255,255,0.05); }
 }
