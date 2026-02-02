@@ -6,66 +6,66 @@
     --button-text-color: var(--tg-theme-button-text-color, #ffffff);
     --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f0f0);
 
+    /* Адаптивный размер сетки под ширину iframe */
     --grid-size: 300px;
     --gap-size: 10px;
 }
 
 body {
     margin: 0;
-    padding: 0;
+    padding: 20px 0;
     background-color: var(--bg-color);
     color: var(--text-color);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100vh;
     user-select: none;
+    touch-action: none; /* Важно для свайпов */
 }
 
-/* --- Шапка и Кнопки --- */
+/* --- Шапка --- */
 .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     width: var(--grid-size);
-    margin-bottom: 20px;
+    margin-bottom: 15px;
 }
-.title { font-size: 40px; font-weight: bold; color: var(--text-color); }
-.scores { display: flex; gap: 10px; }
+.title { font-size: 36px; font-weight: 800; color: var(--text-color); }
+.scores { display: flex; gap: 8px; }
 .score-box {
     background-color: var(--secondary-bg);
-    padding: 5px 15px;
-    border-radius: 5px;
+    padding: 5px 12px;
+    border-radius: 6px;
     text-align: center;
-    min-width: 60px;
+    min-width: 55px;
 }
-.score-title { font-size: 10px; color: var(--hint-color); text-transform: uppercase; }
-.score-value { font-size: 18px; font-weight: bold; }
+.score-title { font-size: 10px; color: var(--hint-color); text-transform: uppercase; font-weight: bold; }
+.score-value { font-size: 16px; font-weight: bold; }
+
 .controls { width: var(--grid-size); display: flex; justify-content: flex-end; margin-bottom: 15px; }
 .new-game-btn {
     background-color: var(--button-color);
     color: var(--button-text-color);
     border: none;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 16px;
-    font-weight: bold;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 600;
     cursor: pointer;
 }
 
-/* --- Игровое поле --- */
+/* --- Поле --- */
 .game-container {
     width: var(--grid-size);
     height: var(--grid-size);
     background-color: var(--secondary-bg);
-    border-radius: 10px;
+    border-radius: 8px;
     position: relative;
     padding: var(--gap-size);
     box-sizing: border-box;
-    touch-action: none;
 }
 
 .grid-bg {
@@ -73,107 +73,66 @@ body {
     grid-template-columns: repeat(4, 1fr);
     grid-template-rows: repeat(4, 1fr);
     gap: var(--gap-size);
-    width: 100%;
-    height: 100%;
+    width: 100%; height: 100%;
 }
 
-.grid-cell {
-    background-color: rgba(128, 128, 128, 0.15);
-    border-radius: 5px;
-}
+.grid-cell { background-color: rgba(128, 128, 128, 0.15); border-radius: 4px; }
 
 .tile-container {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
     margin: var(--gap-size);
     pointer-events: none;
 }
 
-/* --- Плитка (Контейнер) --- */
 .tile {
     position: absolute;
     transition: transform 100ms ease-in-out;
     z-index: 10;
 }
 
-/* --- Внутренность плитки --- */
 .tile-inner {
-    width: 100%;
-    height: 100%;
-    border-radius: 5px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 28px;
-    font-weight: bold;
-    background-color: #eee4da;
-    color: #000;
+    width: 100%; height: 100%;
+    border-radius: 4px;
+    display: flex; justify-content: center; align-items: center;
+    font-size: 26px; font-weight: bold;
+    background-color: #eee4da; color: #000;
 }
 
 /* Анимации */
-.tile-new .tile-inner {
-    animation: appear 200ms ease-in-out backwards;
-}
+.tile-new .tile-inner { animation: appear 200ms ease-in-out backwards; }
+.tile-merged .tile-inner { animation: pop 200ms ease-in-out backwards; }
 
-.tile-merged .tile-inner {
-    animation: pop 200ms ease-in-out backwards;
-}
+@keyframes appear { 0% { opacity: 0; transform: scale(0); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes pop { 0% { transform: scale(0.8); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
-@keyframes appear {
-    0% { opacity: 0; transform: scale(0); }
-    100% { opacity: 1; transform: scale(1); }
-}
-
-@keyframes pop {
-    0% { transform: scale(0.8); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
-}
-
-/* --- Цвета плиток --- */
-.tile-2 .tile-inner    { background: #ffffff; color: #333; box-shadow: 0 0 2px rgba(0,0,0,0.1); }
-.tile-4 .tile-inner    { background: #e3e8eb; color: #333; }
-.tile-8 .tile-inner    { background: #b0c4de; color: #fff; }
-.tile-16 .tile-inner   { background: #87b3d4; color: #fff; }
-.tile-32 .tile-inner   { background: #6da2cb; color: #fff; }
-.tile-64 .tile-inner   { background: #5391c2; color: #fff; }
-.tile-128 .tile-inner  { background: #3b80b9; color: #fff; font-size: 24px; }
-.tile-256 .tile-inner  { background: #2a70b0; color: #fff; font-size: 24px; }
-.tile-512 .tile-inner  { background: #1e60a7; color: #fff; font-size: 24px; }
+/* Цвета */
+.tile-2 .tile-inner { background: #fff; color: #333; box-shadow: 0 0 2px rgba(0,0,0,0.1); }
+.tile-4 .tile-inner { background: #e3e8eb; color: #333; }
+.tile-8 .tile-inner { background: #b0c4de; color: #fff; }
+.tile-16 .tile-inner { background: #87b3d4; color: #fff; }
+.tile-32 .tile-inner { background: #6da2cb; color: #fff; }
+.tile-64 .tile-inner { background: #5391c2; color: #fff; }
+.tile-128 .tile-inner { background: #3b80b9; color: #fff; font-size: 22px; }
+.tile-256 .tile-inner { background: #2a70b0; color: #fff; font-size: 22px; }
+.tile-512 .tile-inner { background: #1e60a7; color: #fff; font-size: 22px; }
 .tile-1024 .tile-inner { background: #14509e; color: #fff; font-size: 18px; }
 .tile-2048 .tile-inner { background: #0b4094; color: #fff; font-size: 18px; box-shadow: 0 0 10px #0b4094; }
-.tile-super .tile-inner { background: #000000; color: #fff; font-size: 14px; }
+.tile-super .tile-inner { background: #000; color: #fff; font-size: 14px; }
 
-/* --- Game Over --- */
+/* Game Over */
 .game-over {
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(255, 255, 255, 0.8);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    border-radius: 10px;
-    z-index: 100;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 500ms ease-in-out;
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255, 255, 255, 0.85);
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    border-radius: 8px; z-index: 100;
+    opacity: 0; pointer-events: none;
+    transition: opacity 300ms ease;
 }
-
-.game-over.active {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.game-message {
-    font-size: 30px;
-    font-weight: bold;
-    margin-bottom: 20px;
-    color: #ffffff;
-    text-align: center;
-    line-height: 1.5;
-}
+.game-over.active { opacity: 1; pointer-events: auto; }
+.game-message { font-size: 28px; font-weight: bold; margin-bottom: 20px; color: #333; text-align: center; }
 
 @media (prefers-color-scheme: dark) {
     .game-over { background: rgba(0, 0, 0, 0.85); }
+    .game-message { color: #fff; }
 }
