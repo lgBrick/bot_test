@@ -1,168 +1,176 @@
 :root {
     --bg-color: var(--tg-theme-bg-color, #ffffff);
+    --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f2f5);
     --text-color: var(--tg-theme-text-color, #000000);
-    --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    --hint-color: var(--tg-theme-hint-color, #8e8e93);
+    --link-color: var(--tg-theme-link-color, #007aff);
     --button-color: var(--tg-theme-button-color, #3390ec);
     --button-text: var(--tg-theme-button-text-color, #ffffff);
-    --hint-color: var(--tg-theme-hint-color, #888888);
-    --danger-color: #ff4d4d;
 
-    /* Цвета для игры */
-    --cell-closed: var(--tg-theme-secondary-bg-color, #c0c0c0);
-    --cell-border-light: rgba(255, 255, 255, 0.4);
-    --cell-border-dark: rgba(0, 0, 0, 0.2);
+    /* Игровые параметры */
+    --cell-size: 32px;
+    --cell-closed: var(--tg-theme-secondary-bg-color, #e4e4e6);
     --cell-open: var(--bg-color);
+    --grid-bg: #d1d1d6;
+
+    /* Цвета цифр */
+    --c1: #007aff; --c2: #34c759; --c3: #ff3b30; --c4: #5856d6;
+    --c5: #af52de; --c6: #ff9500; --c7: #ff2d55; --c8: #8e8e93;
 }
 
 body {
     margin: 0; padding: 0;
-    background-color: var(--bg-color);
+    background-color: var(--secondary-bg); /* Фон как в чатах/настройках */
     color: var(--text-color);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Roboto, sans-serif;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
-    display: flex; justify-content: center;
-    min-height: 100vh;
-    overflow: hidden; /* Основной скролл страницы блокируем, скроллим только игру */
+    height: 100vh; overflow: hidden;
 }
 
 .game-wrapper {
-    width: 100%; height: 100vh;
-    box-sizing: border-box;
-    display: flex; flex-direction: column;
-    position: relative;
+    height: 100%; display: flex; flex-direction: column;
 }
 
 .hidden { display: none !important; }
 
-/* --- МЕНЮ --- */
+/* === МЕНЮ === */
 #menu-screen {
     padding: 20px;
-    display: flex; flex-direction: column;
-    align-items: center;
-    width: 100%; height: 100%;
+    height: 100%; overflow-y: auto;
     box-sizing: border-box;
-    overflow-y: auto;
 }
-h1, h3 { margin: 10px 0; text-align: center; }
 
-.presets { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.menu-header { text-align: center; margin-bottom: 25px; margin-top: 10px; }
+h1 { margin: 0; font-size: 28px; }
+.subtitle { color: var(--hint-color); font-size: 13px; margin-top: 5px; }
+
+/* Список пресетов (Telegram Group Style) */
+.presets-list {
+    background: var(--bg-color);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 25px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
 .preset-btn {
-    background: var(--secondary-bg);
-    padding: 15px; border-radius: 10px;
-    cursor: pointer; display: flex; flex-direction: column; align-items: center;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    transition: transform 0.1s;
+    width: 100%;
+    background: var(--bg-color);
+    border: none;
+    border-bottom: 1px solid var(--secondary-bg); /* Разделитель */
+    padding: 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.2s;
 }
-.preset-btn:active { transform: scale(0.98); }
-.mode-title { font-weight: bold; font-size: 18px; color: var(--button-color); }
-.mode-desc { font-size: 14px; color: var(--hint-color); margin: 4px 0; }
-.best-score { font-size: 14px; font-weight: bold; color: var(--text-color); }
+.preset-btn:last-child { border-bottom: none; }
+.preset-btn:active { background: var(--secondary-bg); }
 
+.preset-info { display: flex; flex-direction: column; gap: 4px; }
+.mode-title { font-size: 17px; font-weight: 600; color: var(--text-color); }
+.mode-desc { font-size: 13px; color: var(--hint-color); }
+
+.preset-score { text-align: right; }
+.score-label { display: block; font-size: 11px; color: var(--hint-color); text-transform: uppercase; }
+.score-val { font-family: monospace; font-size: 15px; color: var(--link-color); font-weight: 500; }
+
+/* Custom Section */
 .custom-section {
-    width: 100%; max-width: 320px;
-    background: var(--secondary-bg);
-    padding: 15px; border-radius: 10px;
-    text-align: center;
+    background: var(--bg-color);
+    padding: 16px; border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
-.inputs-row { display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; }
+h3 { margin: 0 0 15px 0; font-size: 16px; text-transform: uppercase; color: var(--hint-color); }
+
+.inputs-row { display: flex; gap: 10px; margin-bottom: 15px; }
 input {
-    width: 60px; padding: 8px; border-radius: 6px; border: 1px solid var(--hint-color);
-    text-align: center; font-size: 16px;
-    background: var(--bg-color); color: var(--text-color);
+    width: 33%; padding: 10px;
+    border: 1px solid var(--secondary-bg);
+    border-radius: 8px;
+    background: var(--secondary-bg); color: var(--text-color);
+    text-align: center; font-size: 16px; outline: none;
 }
-#start-custom-btn {
+input:focus { border-color: var(--link-color); background: var(--bg-color); }
+
+.action-btn {
+    width: 100%; padding: 14px;
     background: var(--button-color); color: var(--button-text);
-    border: none; padding: 10px 20px; border-radius: 8px; font-size: 16px; width: 100%; cursor: pointer;
+    border: none; border-radius: 10px;
+    font-size: 17px; font-weight: 600;
+    cursor: pointer;
+}
+.action-btn:active { opacity: 0.8; }
+.text-btn {
+    background: none; border: none; color: var(--link-color);
+    font-size: 17px; padding: 10px; cursor: pointer;
 }
 
-/* --- ИГРА --- */
-#game-screen {
-    display: flex; flex-direction: column;
-    height: 100%; width: 100%;
-}
+/* === ИГРА === */
+#game-screen { background: var(--bg-color); height: 100%; display: flex; flex-direction: column; }
 
 .header {
-    flex-shrink: 0; /* Шапка не сжимается */
-    background-color: var(--secondary-bg);
-    padding: 10px;
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--secondary-bg);
     display: flex; justify-content: space-between; align-items: center;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    z-index: 10;
 }
 
-.counter-box {
-    background-color: #000; color: #ff0000;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 20px; font-weight: bold;
-    padding: 4px 8px; border-radius: 4px;
-    min-width: 40px; text-align: center;
-}
-.timer-box { min-width: 70px; } /* Шире для миллисекунд */
+.icon-btn { background: none; border: none; padding: 5px; color: var(--text-color); cursor: pointer; }
 
-.face-btn, .menu-btn {
-    font-size: 22px;
-    background: var(--cell-closed);
-    border: none;
-    width: 40px; height: 40px;
-    border-radius: 8px;
-    cursor: pointer;
-    box-shadow: 2px 2px 0 var(--cell-border-dark), -2px -2px 0 var(--cell-border-light);
-    display: flex; align-items: center; justify-content: center;
+.counters { display: flex; gap: 10px; }
+.counter-pill {
+    background: var(--secondary-bg);
+    padding: 6px 12px; border-radius: 16px;
+    font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums;
 }
-.face-btn:active, .menu-btn:active { box-shadow: inset 2px 2px 0 var(--cell-border-dark); transform: translate(1px, 1px); }
-.menu-btn { font-size: 20px; margin-left: 10px; }
 
-/* Скролл враппер для сетки */
+.face-btn { font-size: 24px; background: none; border: none; cursor: pointer; }
+
 .scroll-wrapper {
-    flex-grow: 1; /* Занимает все оставшееся место */
-    overflow: auto; /* Включаем скролл */
-    display: flex;
-    justify-content: center; /* Центрируем, если поле маленькое */
-    align-items: flex-start; /* Прижимаем к верху */
+    flex: 1; overflow: auto;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--secondary-bg);
     padding: 20px;
-    background-color: var(--hint-color); /* Фон за полем */
-    touch-action: pan-x pan-y; /* Разрешаем нативный скролл */
 }
 
 .grid-container {
-    display: grid;
-    gap: 1px;
-    background-color: #888;
-    border: 4px solid var(--secondary-bg);
-    /* Размеры задаются JS, но предотвращаем сжатие */
-    flex-shrink: 0;
+    display: grid; gap: 2px;
+    background: #c8c7cc; /* Цвет сетки */
+    padding: 2px; border-radius: 4px;
+    margin: auto;
 }
 
 .cell {
-    width: 30px; height: 30px; /* Фиксированный размер для удобства нажатия */
-    background-color: var(--cell-closed);
+    width: var(--cell-size); height: var(--cell-size);
+    background: var(--cell-closed);
     display: flex; justify-content: center; align-items: center;
-    font-weight: bold; font-size: 16px;
-    cursor: pointer;
-    box-shadow: inset 2px 2px 0 var(--cell-border-light), inset -2px -2px 0 var(--cell-border-dark);
+    font-size: 18px; font-weight: 700; cursor: pointer;
 }
-.cell.open { background-color: var(--cell-open); box-shadow: none; border: 1px solid #ddd; width: 28px; height: 28px; /* Compensate border */ }
-.cell.flagged { color: red; }
-.cell.mine { background-color: var(--danger-color); }
+.cell.open { background: var(--cell-open); cursor: default; }
+.cell:active:not(.open) { filter: brightness(0.9); }
+.cell.flagged { color: #ff3b30; }
+.cell.mine { background: #ff3b30 !important; color: #fff !important; }
+.cell.wrong-flag { position: relative; }
+.cell.wrong-flag::after { content: '❌'; position: absolute; font-size: 10px; right: 2px; bottom: 2px; }
 
-/* Цвета цифр */
-.val-1 { color: #3390ec; } .val-2 { color: #388e3c; } .val-3 { color: #d32f2f; }
-.val-4 { color: #7b1fa2; } .val-5 { color: #f57c00; } .val-6 { color: #0097a7; }
+/* Values */
+.val-1 { color: var(--c1); } .val-2 { color: var(--c2); } .val-3 { color: var(--c3); }
+.val-4 { color: var(--c4); } .val-5 { color: var(--c5); } .val-6 { color: var(--c6); }
+.val-7 { color: var(--c7); } .val-8 { color: var(--c8); }
 
-/* Оверлей */
+/* Overlay */
 .overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.6);
-    display: flex; justify-content: center; align-items: center;
-    z-index: 100;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(5px);
+    display: flex; justify-content: center; align-items: center; z-index: 999;
 }
-.overlay-content { background: var(--bg-color); padding: 25px; border-radius: 16px; text-align: center; min-width: 250px; }
-.overlay-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }
-button { font-family: inherit; }
-#overlay-restart-btn, #overlay-menu-btn {
-    border: none; padding: 10px 20px; border-radius: 8px; font-size: 16px; cursor: pointer;
+.overlay-content {
+    background: var(--bg-color);
+    padding: 30px; border-radius: 20px;
+    text-align: center; width: 80%; max-width: 280px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 }
-#overlay-restart-btn { background: var(--button-color); color: var(--button-text); }
-.secondary-btn { background: var(--secondary-bg); color: var(--text-color); }
-.result-time { font-family: 'Courier New', monospace; font-size: 24px; margin: 10px 0; font-weight: bold; }
+.result-icon { font-size: 50px; margin-bottom: 10px; }
+.result-time { font-size: 28px; font-weight: 600; font-family: monospace; margin: 10px 0 20px; }
+.overlay-buttons { display: flex; flex-direction: column; gap: 10px; }
