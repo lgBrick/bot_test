@@ -1,0 +1,149 @@
+:root {
+    --bg-color: var(--tg-theme-bg-color, #ffffff);
+    --text-color: var(--tg-theme-text-color, #000000);
+    --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    --button-color: var(--tg-theme-button-color, #3390ec);
+    --button-text: var(--tg-theme-button-text-color, #ffffff);
+    --hint-color: var(--tg-theme-hint-color, #888888);
+
+    /* Цвета для игры */
+    --cell-closed: var(--tg-theme-secondary-bg-color, #c0c0c0);
+    --cell-border-light: rgba(255, 255, 255, 0.3);
+    --cell-border-dark: rgba(0, 0, 0, 0.2);
+    --cell-open: var(--bg-color);
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+.game-wrapper {
+    width: 100%;
+    max-width: 400px;
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Шапка */
+.header {
+    width: 100%;
+    background-color: var(--secondary-bg);
+    padding: 10px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    box-shadow: inset 2px 2px 5px var(--cell-border-dark),
+                inset -2px -2px 5px var(--cell-border-light);
+}
+
+.counter-box {
+    background-color: #000;
+    color: #ff0000;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 24px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+    min-width: 50px;
+    text-align: center;
+}
+
+.face-btn {
+    font-size: 24px;
+    background: var(--cell-closed);
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 2px 2px 5px var(--cell-border-dark),
+                -2px -2px 5px var(--cell-border-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.face-btn:active {
+    box-shadow: inset 2px 2px 5px var(--cell-border-dark);
+}
+
+/* Сетка */
+.grid-container {
+    display: grid;
+    /* Размер сетки задается в JS */
+    gap: 2px;
+    background-color: var(--hint-color);
+    padding: 4px;
+    border-radius: 6px;
+    touch-action: none; /* Важно для свайпов и долгого нажатия */
+}
+
+.cell {
+    width: 32px;
+    height: 32px;
+    background-color: var(--cell-closed);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 18px;
+    cursor: pointer;
+    border-radius: 2px;
+    /* Эффект кнопки */
+    box-shadow: inset 2px 2px 0 var(--cell-border-light),
+                inset -2px -2px 0 var(--cell-border-dark);
+}
+
+.cell.open {
+    background-color: var(--cell-open);
+    box-shadow: none;
+    border: 1px solid var(--secondary-bg);
+}
+
+.cell.flagged { color: red; }
+.cell.mine { background-color: #ff4d4d; }
+
+/* Цвета цифр */
+.val-1 { color: #3390ec; }
+.val-2 { color: #388e3c; }
+.val-3 { color: #d32f2f; }
+.val-4 { color: #7b1fa2; }
+.val-5 { color: #f57c00; }
+.val-6 { color: #0097a7; }
+.val-7 { color: #424242; }
+.val-8 { color: #9e9e9e; }
+
+/* Оверлей */
+.overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 100;
+}
+.overlay.hidden { display: none; }
+.overlay-content {
+    background: var(--bg-color);
+    padding: 20px;
+    border-radius: 12px;
+    text-align: center;
+}
+#overlay-restart-btn {
+    background: var(--button-color);
+    color: var(--button-text);
+    border: none; padding: 10px 20px;
+    border-radius: 8px; font-size: 16px;
+    cursor: pointer;
+}

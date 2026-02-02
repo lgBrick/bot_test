@@ -4,161 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Minesweeper</title>
-    <style>
-        :root {
-            --bg-color: var(--tg-theme-bg-color, #ffffff);
-            --text-color: var(--tg-theme-text-color, #000000);
-            --button-bg: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            --accent: var(--tg-theme-button-color, #3390ec);
-        }
-
-        body {
-            font-family: sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin: 0;
-            padding: 20px;
-            overflow: hidden;
-            user-select: none;
-        }
-
-        #stats { margin-bottom: 15px; font-weight: bold; font-size: 1.2rem; }
-
-        #grid {
-            display: grid;
-            grid-template-columns: repeat(10, 30px);
-            grid-template-rows: repeat(10, 30px);
-            gap: 2px;
-            background-color: #ccc;
-            border: 2px solid #ccc;
-            border-radius: 8px;
-        }
-
-        .cell {
-            width: 30px;
-            height: 30px;
-            background-color: var(--button-bg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 2px;
-            font-size: 14px;
-        }
-
-        .cell.revealed { background-color: #e0e0e0; cursor: default; }
-        .cell.mine { background-color: #ff4d4d; }
-        .cell.flag { background-color: #ffd700; }
-
-        .controls { margin-top: 20px; text-align: center; font-size: 0.9rem; opacity: 0.7; }
-    </style>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="game-wrapper">
+        <!-- Шапка: Бомбы, Смайлик, Таймер -->
+        <div class="header">
+            <div class="counter-box">
+                <span id="mines-count">000</span>
+            </div>
 
-    <div id="stats">Мины: <span id="mine-count">10</span></div>
-    <div id="grid"></div>
-    <div class="controls">Долгое нажатие — флаг</div>
+            <button class="face-btn" id="restart-btn">🙂</button>
 
-    <script>
-        const grid = document.getElementById('grid');
-        const size = 10;
-        const minesCount = 10;
-        let cells = [];
-        let gameOver = false;
+            <div class="counter-box">
+                <span id="timer">000</span>
+            </div>
+        </div>
 
-        // Инициализация поля
-        function init() {
-            const positions = Array(size * size).fill(false);
-            let placed = 0;
-            while(placed < minesCount) {
-                let r = Math.floor(Math.random() * positions.length);
-                if(!positions[r]) { positions[r] = true; placed++; }
-            }
+        <!-- Игровое поле -->
+        <div class="grid-container" id="grid">
+            <!-- Ячейки генерируются через JS -->
+        </div>
 
-            for(let i=0; i<size*size; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'cell';
-                cell.dataset.index = i;
-                cell.dataset.mine = positions[i];
+        <!-- Сообщение о результате (опционально, для красоты) -->
+        <div id="result-overlay" class="overlay hidden">
+            <div class="overlay-content">
+                <h2 id="result-title">Game Over</h2>
+                <button id="overlay-restart-btn">Заново</button>
+            </div>
+        </div>
+    </div>
 
-                // Обработка долгого нажатия для мобилок (флаг)
-                let timer;
-                cell.addEventListener('touchstart', () => {
-                    timer = setTimeout(() => { toggleFlag(cell); timer = null; }, 500);
-                });
-                cell.addEventListener('touchend', (e) => {
-                    if(timer) { clearTimeout(timer); clickCell(cell); }
-                    e.preventDefault();
-                });
-
-                cell.addEventListener('click', () => clickCell(cell));
-                cell.addEventListener('contextmenu', (e) => { e.preventDefault(); toggleFlag(cell); });
-
-                grid.appendChild(cell);
-                cells.push(cell);
-            }
-        }
-
-        function clickCell(cell) {
-            if(gameOver || cell.classList.contains('revealed') || cell.classList.contains('flag')) return;
-
-            if(cell.dataset.mine === 'true') {
-                gameOver = true;
-                revealMines();
-                alert('Бум! Игра окончена.');
-                return;
-            }
-
-            reveal(parseInt(cell.dataset.index));
-        }
-
-        function toggleFlag(cell) {
-            if(gameOver || cell.classList.contains('revealed')) return;
-            cell.classList.toggle('flag');
-            cell.innerText = cell.classList.contains('flag') ? '🚩' : '';
-        }
-
-        function reveal(idx) {
-            const cell = cells[idx];
-            if(cell.classList.contains('revealed')) return;
-            cell.classList.add('revealed');
-
-            const mines = countMines(idx);
-            if(mines > 0) {
-                cell.innerText = mines;
-                cell.style.color = ['blue','green','red','darkblue','brown','cyan','black','gray'][mines-1];
-            } else {
-                getNeighbors(idx).forEach(n => reveal(n));
-            }
-        }
-
-        function countMines(idx) {
-            return getNeighbors(idx).filter(n => cells[n].dataset.mine === 'true').length;
-        }
-
-        function getNeighbors(idx) {
-            const res = [];
-            const x = idx % size, y = Math.floor(idx / size);
-            for(let i=-1; i<=1; i++) {
-                for(let j=-1; j<=1; j++) {
-                    if(i===0 && j===0) continue;
-                    if(x+i >= 0 && x+i < size && y+j >= 0 && y+j < size) {
-                        res.push((y+j)*size + (x+i));
-                    }
-                }
-            }
-            return res;
-        }
-
-        function revealMines() {
-            cells.forEach(c => { if(c.dataset.mine === 'true') { c.classList.add('mine'); c.innerText = '💣'; }});
-        }
-
-        init();
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
