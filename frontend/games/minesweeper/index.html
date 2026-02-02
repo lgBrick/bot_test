@@ -3,35 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Minesweeper</title>
+    <title>Minesweeper TG</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="game-wrapper">
-        <!-- Шапка: Бомбы, Смайлик, Таймер -->
-        <div class="header">
-            <div class="counter-box">
-                <span id="mines-count">000</span>
+
+        <div id="menu-screen">
+            <h1>Сапер</h1>
+
+            <div class="presets">
+                <div class="preset-btn" data-mode="beginner">
+                    <span class="mode-title">Новичок</span>
+                    <span class="mode-desc">9x9 • 10 мин</span>
+                    <span class="best-score" id="score-beginner">--:--</span>
+                </div>
+                <div class="preset-btn" data-mode="amateur">
+                    <span class="mode-title">Любитель</span>
+                    <span class="mode-desc">16x16 • 40 мин</span>
+                    <span class="best-score" id="score-amateur">--:--</span>
+                </div>
+                <div class="preset-btn" data-mode="expert">
+                    <span class="mode-title">Эксперт</span>
+                    <span class="mode-desc">30x16 • 99 мин</span>
+                    <span class="best-score" id="score-expert">--:--</span>
+                </div>
             </div>
 
-            <button class="face-btn" id="restart-btn">🙂</button>
-
-            <div class="counter-box">
-                <span id="timer">000</span>
+            <div class="custom-section">
+                <h3>Своя игра</h3>
+                <div class="inputs-row">
+                    <input type="number" id="custom-cols" placeholder="Шир" min="5" max="99" value="10">
+                    <input type="number" id="custom-rows" placeholder="Выс" min="5" max="99" value="10">
+                    <input type="number" id="custom-mines" placeholder="Мины" min="1" value="15">
+                </div>
+                <button id="start-custom-btn">Играть</button>
             </div>
         </div>
 
-        <!-- Игровое поле -->
-        <div class="grid-container" id="grid">
-            <!-- Ячейки генерируются через JS -->
+        <div id="game-screen" class="hidden">
+            <div class="header">
+                <div class="counter-box">
+                    <span id="mines-count">000</span>
+                </div>
+
+                <button class="face-btn" id="restart-btn">🙂</button>
+                <button class="menu-btn" id="back-to-menu-btn">☰</button>
+
+                <div class="counter-box timer-box">
+                    <span id="timer">00:00</span>
+                </div>
+            </div>
+
+            <div class="scroll-wrapper">
+                <div class="grid-container" id="grid">
+                    </div>
+            </div>
         </div>
 
-        <!-- Сообщение о результате (опционально, для красоты) -->
         <div id="result-overlay" class="overlay hidden">
             <div class="overlay-content">
                 <h2 id="result-title">Game Over</h2>
-                <button id="overlay-restart-btn">Заново</button>
+                <p id="result-time" class="result-time"></p>
+                <div class="overlay-buttons">
+                    <button id="overlay-restart-btn">Заново</button>
+                    <button id="overlay-menu-btn" class="secondary-btn">Меню</button>
+                </div>
             </div>
         </div>
     </div>
