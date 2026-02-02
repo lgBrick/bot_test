@@ -44,8 +44,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 title: "2048 (моя игра)",
                 categories: ["Новые", "Головоломки"],
                 icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
-                url: "games/2048v2/index.html",
-                storageKey: "game_2048v2_best_score"
+                url: "games/2048v2/index.html"
             }
         ];
 
@@ -199,48 +198,6 @@ document.addEventListener("DOMContentLoaded", () => {
         // --- ПЕРВЫЙ ЗАПУСК ---
         renderCategories();
         renderGames();
-        // Функция ищет игры с ключом storageKey и запрашивает данные
-        function debugLoadScores() {
-            if (!tg.CloudStorage) {
-                alert("Главное меню: CloudStorage недоступен");
-                return;
-            }
-
-            const key = "game_2048v2_best_score";
-
-            tg.CloudStorage.getItem(key, (err, value) => {
-                if (err) {
-                    alert("Меню ошибка Cloud: " + err);
-                } else {
-                    // alert("Меню видит рекорд: " + value); // Включи, чтобы проверить
-                    if (value) {
-                        updateCardBadge("2048 (моя игра)", value);
-                    }
-                }
-            });
-        }
-
-        function updateCardBadge(title, score) {
-            // Ищем карточку топорным методом, чтобы точно найти
-            const allTitles = document.querySelectorAll('.game-title');
-            allTitles.forEach(t => {
-                if (t.innerText.includes("2048")) { // Ищем любое вхождение для теста
-                     // Добавляем бейдж
-                     const icon = t.parentElement.querySelector('.game-icon');
-                     let b = icon.querySelector('.score-badge');
-                     if(!b) {
-                        b = document.createElement('div');
-                        b.className = 'score-badge';
-                        b.style.cssText = "position:absolute;bottom:0;width:100%;background:rgba(0,0,0,0.8);color:#fff;font-size:12px;text-align:center;";
-                        icon.appendChild(b);
-                     }
-                     b.innerText = "🏆 " + score;
-                }
-            });
-        }
-
-        // Запуск через секунду
-        setTimeout(debugLoadScores, 1000);
 
     } catch (error) {
         // Если всё же произошла критическая ошибка, покажем её на экране
