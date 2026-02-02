@@ -5,6 +5,16 @@ document.addEventListener('DOMContentLoaded', () => {
     debugEl.id = 'debug-log';
     document.body.appendChild(debugEl);
 
+    function loadScoreFromCloud() {
+    tg.CloudStorage.getItem('best_score_2048', (err, value) => {
+        if (!err && value) {
+            const cloudScore = parseInt(value);
+            // Здесь код, который устанавливает рекорд в интерфейс игры
+            console.log("Рекорд из облака:", cloudScore);
+        }
+    });
+}
+
     function log(msg) {
         console.log('[2048]', msg);
         const el = document.getElementById('debug-log');
@@ -59,10 +69,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 safeStorage.setItem(KEYS.BEST_SCORE, score);
 
                 // 2. Отправляем в облако (если есть доступ)
-                if (tg && tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
-                    tg.CloudStorage.setItem(KEYS.BEST_SCORE, score.toString(), (err) => {
-                        if (err) log('Cloud Save Err: ' + err);
-                    });
+                if (window.parent) {
+                        window.parent.postMessage({
+                            type: 'save_score',
+                            game: '2048', // id игры
+                            value: score
+                        }, '*');
+                    }
                 }
             } catch (e) {
                 log('Save Score Fail: ' + e.message);

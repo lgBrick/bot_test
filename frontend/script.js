@@ -48,6 +48,20 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         ];
 
+        window.addEventListener('message', function(event) {
+            // Проверяем, что сообщение пришло с нужным типом
+            if (event.data.type === 'save_score') {
+                const { game, value } = event.data;
+
+                // Сохраняем в Telegram Cloud Storage
+                tg.CloudStorage.setItem(`best_score_${game}`, value.toString(), (err, success) => {
+                    if (success) {
+                        console.log(`Рекорд для ${game} (${value}) сохранен в облако!`);
+                    }
+                });
+            }
+        });
+
         // --- ПОЛУЧЕНИЕ ЭЛЕМЕНТОВ DOM ---
         const gamesContainer = document.getElementById("games-container");
         const searchInput = document.getElementById("search-input");
