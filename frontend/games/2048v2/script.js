@@ -3,78 +3,66 @@ tg.ready();
 tg.expand();
 
 // === Хранилище ===
-// --- script.js (Внутри игры 2048) ---
-
 const Storage = {
-    // Уникальный ключ для этой игры. Если сделаешь другую игру, поменяй этот ключ!
-    BEST_SCORE_KEY: 'game_2048_best_score',
-    GAME_STATE_KEY: 'game_2048_state',
+    // ВАЖНО: Этот ключ должен совпадать с тем, что мы напишем в главном меню
+    BEST_SCORE_KEY: 'game_2048v2_best_score',
+    GAME_STATE_KEY: 'game_2048v2_state',
 
-    // --- Получение рекорда ---
+    // Получить рекорд (вызывается при старте)
     async getBestScore() {
         const localScore = parseInt(localStorage.getItem(this.BEST_SCORE_KEY)) || 0;
 
-        // Если старая версия Telegram или нет CloudStorage, возвращаем локальное
-        if (!tg.CloudStorage || !tg.isVersionAtLeast('6.9')) {
-            return localScore;
-        }
-
-        return new Promise((resolve) => {
-            tg.CloudStorage.getItem(this.BEST_SCORE_KEY, (err, value) => {
-                if (err) {
-                    console.error('[Cloud] Read Error:', err);
-                    resolve(localScore); // При ошибке верим локальному
-                } else {
-                    const cloudScore = value ? parseInt(value) : 0;
-
-                    // Синхронизация: выбираем большее значение
-                    if (cloudScore > localScore) {
-                        // В облаке больше -> обновляем локальное
-                        localStorage.setItem(this.BEST_SCORE_KEY, cloudScore);
-                        resolve(cloudScore);
-                    } else if (localScore > cloudScore) {
-                        // Локально больше -> пушим в облако
-                        this.setBestScore(localScore);
-                        resolve(localScore);
+        // Если есть Telegram Cloud
+        if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
+            return new Promise((resolve) => {
+                tg.CloudStorage.getItem(this.BEST_SCORE_KEY, (err, value) => {
+                    if (!err && value) {
+                        const cloudScore = parseInt(value);
+                        // Если в облаке рекорд больше, обновляем локальный и возвращаем его
+                        if (cloudScore > localScore) {
+                            localStorage.setItem(this.BEST_SCORE_KEY, cloudScore);
+                            resolve(cloudScore);
+                        } else {
+                            // Если локально больше (играли офлайн), возвращаем локальный
+                            // (синхронизация произойдет при следующем сохранении)
+                            resolve(localScore);
+                        }
                     } else {
                         resolve(localScore);
                     }
-                }
+                });
             });
-        });
+        }
+        return localScore;
     },
 
-    // --- Сохранение рекорда ---
+    // Сохранить рекорд (вызывается при каждом наборе очков)
     setBestScore(score) {
-        // 1. Сохраняем локально мгновенно
+        // 1. Сохраняем локально сразу
         localStorage.setItem(this.BEST_SCORE_KEY, score);
 
-        // 2. Сохраняем в облако (асинхронно)
+        // 2. Отправляем в Telegram
         if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
-            tg.CloudStorage.setItem(this.BEST_SCORE_KEY, score.toString(), (err, isStored) => {
-                if (err) {
-                    console.error('[Cloud] Save Error:', err);
-                } else if (isStored) {
-                    console.log('[Cloud] Score saved:', score);
-                }
+            // Сохраняем как строку
+            tg.CloudStorage.setItem(this.BEST_SCORE_KEY, score.toString(), (err, stored) => {
+                if (err) console.error('Cloud save error:', err);
             });
         }
     },
 
-    // ... методы gameState остаются такими же (они нужны только локально для продолжения сессии)
+    // ... методы для сохранения состояния поля оставляем старые (они только локальные)
     saveGameState(gridState) {
         localStorage.setItem(this.GAME_STATE_KEY, JSON.stringify(gridState));
     },
-
     getGameState() {
         const state = localStorage.getItem(this.GAME_STATE_KEY);
         return state ? JSON.parse(state) : null;
     },
-
     clearGameState() {
         localStorage.removeItem(this.GAME_STATE_KEY);
     }
 };
+
 // === Класс Плитки ===
 class Tile {
     constructor(container, value, x, y, cellSize, gap) {
@@ -387,11 +375,14 @@ class Game2048 {
     updateScore(newScore) {
         this.score = newScore;
         this.scoreEl.innerText = this.score;
-        // Рекорд здесь не сохраняем в облако каждый раз (чтобы не спамить),
-        // а только в переменной, сохранение будет в saveData()
+
+        // Если текущий счет побил рекорд
         if (this.score > this.bestScore) {
             this.bestScore = this.score;
             this.bestScoreEl.innerText = this.bestScore;
+
+            // ВАЖНО: Вызываем сохранение
+            Storage.setBestScore(this.bestScore);
         }
     }
 

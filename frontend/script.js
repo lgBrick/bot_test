@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 categories: ["Новые", "Головоломки"],
                 icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
                 url: "games/2048v2/index.html",
-                storageKey: "game_2048_best_score"
+                storageKey: "game_2048v2_best_score"
             }
         ];
 
@@ -196,63 +196,53 @@ document.addEventListener("DOMContentLoaded", () => {
         }`;
         document.head.appendChild(styleSheet);
 
-
-                // --- script.js (Корневой) ---
-
-        // Функция обновления UI карточек с рекордами
-        function updateGameCardsWithScores(scoresData) {
-            // scoresData - это объект { "key1": "100", "key2": "500" }
-            games.forEach(game => {
-                if (game.storageKey && scoresData[game.storageKey]) {
-                    const score = scoresData[game.storageKey];
-
-                    // Находим карточку игры (немного костыльно, но эффективно)
-                    // Ищем по заголовку, так как ID в DOM мы не ставили.
-                    const titles = document.querySelectorAll('.game-title');
-                    titles.forEach(titleEl => {
-                        if (titleEl.innerText === game.title) {
-                            const card = titleEl.parentElement;
-
-                            // Проверяем, нет ли уже бейджа
-                            let badge = card.querySelector('.score-badge');
-                            if (!badge) {
-                                badge = document.createElement('div');
-                                badge.className = 'score-badge';
-                                // Вставляем бейдж поверх иконки
-                                const iconContainer = card.querySelector('.game-icon');
-                                iconContainer.appendChild(badge);
-                            }
-                            badge.innerText = `🏆 ${score}`;
-                        }
-                    });
-                }
-            });
-        }
-
-        // Загрузка рекордов из облака
-        function loadCloudScores() {
-            if (!tg.CloudStorage) return;
-
-            // Собираем все ключи всех игр
-            const keys = games.map(g => g.storageKey).filter(k => k);
-
-            if (keys.length === 0) return;
-
-            tg.CloudStorage.getItems(keys, (err, values) => {
-                if (!err && values) {
-                    // values вернется в формате: { "key": "value" }
-                    // Но Telegram может вернуть null для пустых ключей, отфильтруем
-                    console.log("Cloud Scores Loaded:", values);
-                    updateGameCardsWithScores(values);
-                }
-            });
-        }
-
-        // Вызываем загрузку рекордов
-        loadCloudScores();
         // --- ПЕРВЫЙ ЗАПУСК ---
         renderCategories();
         renderGames();
+        // Функция ищет игры с ключом storageKey и запрашивает данные
+        function loadHighScores() {
+            if (!tg.CloudStorage) return;
+
+            // Находим игру 2048v2 (или все игры с ключами)
+            const gameWithScore = games.find(g => g.storageKey === "game_2048v2_best_score");
+
+            if (gameWithScore) {
+                tg.CloudStorage.getItem(gameWithScore.storageKey, (err, value) => {
+                    if (!err && value) {
+                        console.log(`Рекорд загружен: ${value}`);
+                        showScoreOnCard(gameWithScore.title, value);
+                    } else {
+                        console.log("Рекорда в облаке пока нет или ошибка:", err);
+                    }
+                });
+            }
+        }
+
+        // Функция рисует цифру поверх карточки
+        function showScoreOnCard(gameTitle, score) {
+            // Ищем карточку по заголовку
+            const titles = document.querySelectorAll('.game-title');
+            titles.forEach(div => {
+                if (div.innerText === gameTitle) {
+                    const card = div.parentElement; // Родитель .game-card
+                    const icon = card.querySelector('.game-icon');
+
+                    // Создаем или обновляем плашку
+                    let badge = icon.querySelector('.score-badge');
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        // Простые стили прямо здесь, чтобы не лезть в css
+                        badge.style.cssText = "position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.7); color: white; font-size: 12px; text-align: center; border-radius: 0 0 16px 16px; padding: 2px 0;";
+                        badge.className = 'score-badge';
+                        icon.appendChild(badge);
+                    }
+                    badge.innerText = `🏆 ${score}`;
+                }
+            });
+        }
+
+        // Вызываем загрузку (через 500мс, чтобы элементы точно отрисовались)
+        setTimeout(loadHighScores, 500);
 
     } catch (error) {
         // Если всё же произошла критическая ошибка, покажем её на экране
