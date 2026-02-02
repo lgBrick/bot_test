@@ -44,7 +44,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 title: "2048 (моя игра)",
                 categories: ["Новые", "Головоломки"],
                 icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
-                url: "games/2048v2/index.html"
+                url: "games/2048v2/index.html",
                 storageKey: "game_2048_best_score"
             }
         ];
