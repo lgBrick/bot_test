@@ -3,32 +3,36 @@ tg.ready();
 tg.expand();
 
 // === Хранилище ===
+// --- games/2048v2/script.js ---
+
 const Storage = {
-    // ВАЖНО: Этот ключ должен совпадать с тем, что мы напишем в главном меню
-    BEST_SCORE_KEY: 'game_2048v2_best_score',
+    BEST_SCORE_KEY: 'game_2048v2_best_score', // Проверь, что этот ключ совпадает везде!
     GAME_STATE_KEY: 'game_2048v2_state',
 
-    // Получить рекорд (вызывается при старте)
     async getBestScore() {
+        // Проверка: видит ли игра Телеграм
+        if (!window.Telegram || !window.Telegram.WebApp) {
+            console.error("Telegram script not loaded inside game!");
+            return parseInt(localStorage.getItem(this.BEST_SCORE_KEY)) || 0;
+        }
+
+        const tg = window.Telegram.WebApp;
         const localScore = parseInt(localStorage.getItem(this.BEST_SCORE_KEY)) || 0;
 
-        // Если есть Telegram Cloud
-        if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
+        if (tg.CloudStorage) {
             return new Promise((resolve) => {
                 tg.CloudStorage.getItem(this.BEST_SCORE_KEY, (err, value) => {
-                    if (!err && value) {
-                        const cloudScore = parseInt(value);
-                        // Если в облаке рекорд больше, обновляем локальный и возвращаем его
+                    if (err) {
+                        // alert("Ошибка чтения Cloud: " + err); // Раскомментируй если нужно
+                        resolve(localScore);
+                    } else {
+                        const cloudScore = value ? parseInt(value) : 0;
                         if (cloudScore > localScore) {
                             localStorage.setItem(this.BEST_SCORE_KEY, cloudScore);
                             resolve(cloudScore);
                         } else {
-                            // Если локально больше (играли офлайн), возвращаем локальный
-                            // (синхронизация произойдет при следующем сохранении)
                             resolve(localScore);
                         }
-                    } else {
-                        resolve(localScore);
                     }
                 });
             });
@@ -36,21 +40,26 @@ const Storage = {
         return localScore;
     },
 
-    // Сохранить рекорд (вызывается при каждом наборе очков)
     setBestScore(score) {
-        // 1. Сохраняем локально сразу
         localStorage.setItem(this.BEST_SCORE_KEY, score);
 
-        // 2. Отправляем в Telegram
-        if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
-            // Сохраняем как строку
+        // ПРОВЕРКА ОТЛАДКИ
+        const tg = window.Telegram.WebApp;
+        if (tg.CloudStorage) {
             tg.CloudStorage.setItem(this.BEST_SCORE_KEY, score.toString(), (err, stored) => {
-                if (err) console.error('Cloud save error:', err);
+                if (err) {
+                    alert("ОШИБКА сохранения в Cloud: " + err);
+                } else if (stored) {
+                    // Если видишь это окно — значит Телеграм принял данные
+                    // alert("УСПЕШНО сохранено в Cloud: " + score);
+                }
             });
+        } else {
+            alert("НЕТ ДОСТУПА к CloudStorage внутри игры!");
         }
     },
 
-    // ... методы для сохранения состояния поля оставляем старые (они только локальные)
+    // ... старые методы состояния ...
     saveGameState(gridState) {
         localStorage.setItem(this.GAME_STATE_KEY, JSON.stringify(gridState));
     },
