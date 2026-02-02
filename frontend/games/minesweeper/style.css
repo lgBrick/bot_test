@@ -1,23 +1,28 @@
 :root {
-    /* Цвета из вашей игры 2048 */
     --bg-color: var(--tg-theme-bg-color, #ffffff);
+    --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f2f5);
     --text-color: var(--tg-theme-text-color, #000000);
-    --hint-color: var(--tg-theme-hint-color, #888888);
+    --hint-color: var(--tg-theme-hint-color, #8e8e93);
+    --link-color: var(--tg-theme-link-color, #007aff);
     --button-color: var(--tg-theme-button-color, #3390ec);
     --button-text: var(--tg-theme-button-text-color, #ffffff);
-    --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f0f0);
 
     /* Игровые параметры */
     --cell-size: 32px;
-    --cell-closed: var(--secondary-bg);
+    --cell-closed: var(--tg-theme-secondary-bg-color, #e4e4e6);
     --cell-open: var(--bg-color);
+    --grid-bg: #d1d1d6;
+
+    /* Цвета цифр */
+    --c1: #007aff; --c2: #34c759; --c3: #ff3b30; --c4: #5856d6;
+    --c5: #af52de; --c6: #ff9500; --c7: #ff2d55; --c8: #8e8e93;
 }
 
 body {
     margin: 0; padding: 0;
-    background-color: var(--bg-color); /* Изменено с secondary на main bg */
+    background-color: var(--secondary-bg); /* Фон как в чатах/настройках */
     color: var(--text-color);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Roboto, sans-serif;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
     height: 100vh; overflow: hidden;
@@ -42,21 +47,23 @@ h1 { margin: 0; font-size: 28px; }
 
 /* Список пресетов (Telegram Group Style) */
 .presets-list {
-    background: var(--secondary-bg);
-    border-radius: 8px;
+    background: var(--bg-color);
+    border-radius: 12px;
     overflow: hidden;
     margin-bottom: 25px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .preset-btn {
     width: 100%;
-    background: transparent;
+    background: var(--bg-color);
     border: none;
-    border-bottom: 1px solid rgba(128, 128, 128, 0.1);
+    border-bottom: 1px solid var(--secondary-bg); /* Разделитель */
     padding: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.2s;
 }
 .preset-btn:last-child { border-bottom: none; }
 .preset-btn:active { background: var(--secondary-bg); }
@@ -76,53 +83,23 @@ h1 { margin: 0; font-size: 28px; }
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 h3 { margin: 0 0 15px 0; font-size: 16px; text-transform: uppercase; color: var(--hint-color); }
-/*---------------------------------------------------------*/
-.inputs-row {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-}
-.input-group {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    flex: 1;
-}
-/*---------------------------------------------------------*/
-.input-group label {
-    font-size: 11px;
-    color: var(--hint-color);
-    text-transform: uppercase;
-    font-weight: bold;
-    text-align: center;
-}
 
+.inputs-row { display: flex; gap: 10px; margin-bottom: 15px; }
 input {
-    width: 100%;
-    padding: 10px 0;
-    border: none;
-    border-radius: 6px;
-    background: var(--secondary-bg);
-    color: var(--text-color);
-    text-align: center;
-    font-size: 16px;
-    font-weight: bold;
-    outline: none;
-    box-sizing: border-box;
+    width: 33%; padding: 10px;
+    border: 1px solid var(--secondary-bg);
+    border-radius: 8px;
+    background: var(--secondary-bg); color: var(--text-color);
+    text-align: center; font-size: 16px; outline: none;
 }
 input:focus { border-color: var(--link-color); background: var(--bg-color); }
 
 .action-btn {
-    width: 100%;
-    padding: 12px;
-    background-color: var(--button-color);
-    color: var(--button-text);
-    border: none;
-    border-radius: 6px;
-    font-size: 16px;
-    font-weight: 600;
+    width: 100%; padding: 14px;
+    background: var(--button-color); color: var(--button-text);
+    border: none; border-radius: 10px;
+    font-size: 17px; font-weight: 600;
     cursor: pointer;
-    transition: opacity 0.2s;
 }
 .action-btn:active { opacity: 0.8; }
 .text-btn {
