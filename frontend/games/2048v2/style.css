@@ -86,8 +86,8 @@ body {
 
 .tile {
     position: absolute;
-    /* Увеличиваем время до 150ms для плавности */
-    transition: transform 150ms ease-in-out;
+    /* Увеличиваем время до 100ms для плавности */
+    transition: transform 100ms ease-in-out;
     z-index: 10;
 }
 
@@ -115,7 +115,7 @@ body {
 }
 
 .tile-new .tile-inner {
-    animation: appear 200ms ease-in-out backwards;
+    animation: appear 150ms ease-in-out backwards;
 }
 
 /* Обязательно добавляем z-index, чтобы анимация была поверх всего */
@@ -124,7 +124,7 @@ body {
 }
 
 .tile-merged .tile-inner {
-    animation: pop 200ms ease-in-out backwards;
+    animation: pop 150ms ease-in-out backwards;
 }
 
 /* Цвета */

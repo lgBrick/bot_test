@@ -182,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.score = 0;
             this.bestScore = 0;
             this.gap = 10;
+            this.isAnimating = false;
 
             this.container = document.getElementById('game-container');
             this.tileContainer = document.getElementById('tile-container');
@@ -287,14 +288,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         move(dir) {
-            if (this.gameOverScreen.classList.contains('active')) return;
+            // 1. ПРОВЕРКА: Если игра окончена ИЛИ идет анимация — выходим
+            if (this.gameOverScreen.classList.contains('active') || this.isAnimating) return;
 
             const vecs = { 'ArrowUp':{x:0,y:-1}, 'ArrowDown':{x:0,y:1}, 'ArrowLeft':{x:-1,y:0}, 'ArrowRight':{x:1,y:0} };
             const v = vecs[dir];
             if(!v) return;
 
             let moved = false;
-            // Сброс флагов и классов анимации перед ходом
+
             this.tiles.forEach(t => {
                 t.mergedFrom = null;
                 t.element.classList.remove('tile-merged');
@@ -314,18 +316,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         const other = this.tiles.find(o => o.x===next.x && o.y===next.y && !o.mergedToRemove);
                         if(other) {
                             if(other.value===t.value && !other.mergedFrom) {
-                                // === СЛИЯНИЕ ===
-                                // Создаем плитку (isMerged = true)
                                 const merged = new Tile(this.tileContainer, t.value*2, next.x, next.y, this.cellSize, this.gap, false, true);
-
-                                // Скрываем новую плитку, пока старые едут
                                 merged.element.style.opacity = '0';
                                 merged.mergedFrom = true;
 
                                 t.mergedToRemove = true;
                                 other.mergedToRemove = true;
-
-                                // Двигаем старую визуально поверх новой
                                 t.element.style.zIndex = 100;
                                 t.x = next.x; t.y = next.y;
                                 t.updatePosition();
@@ -346,17 +342,16 @@ document.addEventListener('DOMContentLoaded', () => {
             })});
 
             if(moved) {
-                // Ждем окончания движения (150ms)
+                // 2. БЛОКИРУЕМ ВВОД: началось движение
+                this.isAnimating = true;
+
                 setTimeout(() => {
-                    // Удаляем старые
                     this.tiles.forEach(t => { if(t.mergedToRemove) t.remove() });
                     this.tiles = this.tiles.filter(t => !t.mergedToRemove);
 
-                    // Показываем новые и анимируем "POP"
                     this.tiles.forEach(t => {
                         if (t.mergedFrom) {
                             t.element.style.opacity = '1';
-                            // Трюк для перезапуска анимации:
                             void t.element.offsetWidth;
                             t.element.classList.add('tile-merged');
                         }
@@ -365,13 +360,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.addTile();
                     this.save();
 
+                    // 3. РАЗБЛОКИРУЕМ ВВОД: анимация и расчеты закончены
+                    this.isAnimating = false;
+
                     if(!this.movesAvailable()) {
                         this.msgEl.innerHTML = `Игра окончена!<br>Счет: ${this.score}`;
                         this.gameOverScreen.classList.add('active');
                         StorageManager.clearState();
                         if (this.score > this.bestScore) StorageManager.setBestScore(this.score);
                     }
-                }, 150);
+                }, 100);
             }
         }
 
