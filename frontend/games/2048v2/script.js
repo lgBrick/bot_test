@@ -132,7 +132,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === КЛАСС ПЛИТКИ ===
     class Tile {
-        constructor(container, value, x, y, cellSize, gap, isRestored = false) {
+        // Добавили merged (булево), чтобы не включать анимацию 'new' для слитых плиток сразу
+        constructor(container, value, x, y, cellSize, gap, isRestored = false, isMerged = false) {
             this.container = container;
             this.value = value;
             this.x = x;
@@ -140,10 +141,15 @@ document.addEventListener('DOMContentLoaded', () => {
             this.cellSize = cellSize;
             this.gap = gap;
             this.mergedToRemove = false;
+            this.mergedFrom = null; // Флаг, что эта плитка - результат слияния
 
             this.element = document.createElement('div');
             this.element.className = `tile tile-${value <= 2048 ? value : 'super'}`;
-            if (!isRestored) this.element.classList.add('tile-new');
+
+            // Анимацию "появления" добавляем только если это новая рандомная плитка
+            if (!isRestored && !isMerged) {
+                this.element.classList.add('tile-new');
+            }
 
             this.inner = document.createElement('div');
             this.inner.className = 'tile-inner';
@@ -155,11 +161,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         updatePosition() {
+            // Используем translate3d для включения аппаратного ускорения (плавнее на телефонах)
             const xPx = this.x * (this.cellSize + this.gap);
             const yPx = this.y * (this.cellSize + this.gap);
             this.element.style.width = `${this.cellSize}px`;
             this.element.style.height = `${this.cellSize}px`;
-            this.element.style.transform = `translate(${xPx}px, ${yPx}px)`;
+            this.element.style.transform = `translate3d(${xPx}px, ${yPx}px, 0)`;
         }
 
         serialize() { return { x: this.x, y: this.y, value: this.value }; }
@@ -286,7 +293,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if(!v) return;
 
             let moved = false;
-            this.tiles.forEach(t => t.mergedFrom = null);
+            // Сбрасываем флаги слияния перед ходом
+            this.tiles.forEach(t => {
+                t.mergedFrom = null;
+                // Важно: убираем класс анимации с прошлого хода, иначе он не сработает повторно
+                t.element.classList.remove('tile-merged');
+            });
 
             const xs = v.x===1?[3,2,1,0]:[0,1,2,3];
             const ys = v.y===1?[3,2,1,0]:[0,1,2,3];
@@ -298,14 +310,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     while(true) {
                         next = {x:cell.x+v.x, y:cell.y+v.y};
                         if(next.x<0||next.x>3||next.y<0||next.y>3) break;
+
                         const other = this.tiles.find(o => o.x===next.x && o.y===next.y && !o.mergedToRemove);
                         if(other) {
                             if(other.value===t.value && !other.mergedFrom) {
-                                const merged = new Tile(this.tileContainer, t.value*2, next.x, next.y, this.cellSize, this.gap);
-                                merged.element.classList.add('tile-merged');
-                                merged.mergedFrom=true;
-                                t.mergedToRemove=true; other.mergedToRemove=true;
-                                t.element.style.zIndex=100; t.x=next.x; t.y=next.y; t.updatePosition();
+                                // === ЛОГИКА СЛИЯНИЯ ===
+                                // 1. Создаем новую плитку, но передаем true последним аргументом (isMerged)
+                                const merged = new Tile(this.tileContainer, t.value*2, next.x, next.y, this.cellSize, this.gap, false, true);
+
+                                // 2. Скрываем её, пока старые плитки едут
+                                merged.element.style.opacity = '0';
+                                merged.mergedFrom = true; // Помечаем, что это результат слияния
+
+                                // 3. Помечаем старые на удаление
+                                t.mergedToRemove=true;
+                                other.mergedToRemove=true;
+
+                                // 4. Двигаем старую плитку визуально к новой
+                                t.element.style.zIndex=100; // Поверх всего
+                                t.x=next.x; t.y=next.y;
+                                t.updatePosition();
+
                                 this.tiles.push(merged);
                                 this.score+=merged.value;
                                 this.scoreEl.innerText = this.score;
@@ -322,19 +347,30 @@ document.addEventListener('DOMContentLoaded', () => {
             })});
 
             if(moved) {
+                // Ждем 150мс (время CSS transition)
                 setTimeout(() => {
-                    this.tiles.forEach(t=>{if(t.mergedToRemove)t.remove()});
-                    this.tiles=this.tiles.filter(t=>!t.mergedToRemove);
+                    // 1. Удаляем старые плитки
+                    this.tiles.forEach(t => { if(t.mergedToRemove) t.remove() });
+                    this.tiles = this.tiles.filter(t => !t.mergedToRemove);
+
+                    // 2. Показываем слитые плитки и запускаем анимацию POP
+                    this.tiles.forEach(t => {
+                        if (t.mergedFrom) {
+                            t.element.style.opacity = '1';
+                            t.element.classList.add('tile-merged');
+                        }
+                    });
+
                     this.addTile();
-                    this.save(); // Сохраняем прогресс и рекорд
+                    this.save();
+
                     if(!this.movesAvailable()) {
                         this.msgEl.innerHTML = `Игра окончена!<br>Счет: ${this.score}`;
                         this.gameOverScreen.classList.add('active');
                         StorageManager.clearState();
-                        // Финальная попытка сохранить рекорд
                         if (this.score > this.bestScore) StorageManager.setBestScore(this.score);
                     }
-                }, 100);
+                }, 150); // Синхронизировано с CSS
             }
         }
 

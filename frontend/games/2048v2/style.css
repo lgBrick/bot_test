@@ -86,7 +86,8 @@ body {
 
 .tile {
     position: absolute;
-    transition: transform 100ms ease-in-out;
+    /* Увеличиваем время до 150ms для плавности */
+    transition: transform 150ms ease-in-out;
     z-index: 10;
 }
 
@@ -100,7 +101,9 @@ body {
 
 /* Анимации */
 .tile-new .tile-inner { animation: appear 200ms ease-in-out backwards; }
-.tile-merged .tile-inner { animation: pop 200ms ease-in-out backwards; }
+.tile.tile-merged {
+    z-index: 20;
+}
 
 @keyframes appear { 0% { opacity: 0; transform: scale(0); } 100% { opacity: 1; transform: scale(1); } }
 @keyframes pop { 0% { transform: scale(0.8); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
