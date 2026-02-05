@@ -346,17 +346,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             })});
 
+            /* --- script.js (внутри метода move, в блоке setTimeout) --- */
+
             if(moved) {
-                // Ждем 150мс (время CSS transition)
+                // Ждем пока плитки доедут (150ms)
                 setTimeout(() => {
-                    // 1. Удаляем старые плитки
+                    // 1. Удаляем старые
                     this.tiles.forEach(t => { if(t.mergedToRemove) t.remove() });
                     this.tiles = this.tiles.filter(t => !t.mergedToRemove);
 
-                    // 2. Показываем слитые плитки и запускаем анимацию POP
+                    // 2. Включаем новые плитки и запускаем анимацию "POP"
                     this.tiles.forEach(t => {
                         if (t.mergedFrom) {
+                            // Сначала делаем видимой
                             t.element.style.opacity = '1';
+
+                            // Небольшой хак: форсируем перерисовку браузера (reflow),
+                            // чтобы анимация проигралась гарантированно
+                            void t.element.offsetWidth;
+
+                            // Добавляем класс, который запускает @keyframes pop
                             t.element.classList.add('tile-merged');
                         }
                     });
@@ -365,14 +374,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.save();
 
                     if(!this.movesAvailable()) {
+                        // ... (код окончания игры) ...
                         this.msgEl.innerHTML = `Игра окончена!<br>Счет: ${this.score}`;
                         this.gameOverScreen.classList.add('active');
                         StorageManager.clearState();
                         if (this.score > this.bestScore) StorageManager.setBestScore(this.score);
                     }
-                }, 150); // Синхронизировано с CSS
+                }, 150);
             }
-        }
 
         movesAvailable() {
             if(this.tiles.length<16) return true;
