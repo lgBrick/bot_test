@@ -14,14 +14,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const games = [
             {
                 id: 1,
-                title: "2048",
-                categories: ["Головоломки", "Популярное", "Классика"],
-                icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
-                url: "games/2048/index.html",
-                storageKeys: ['bestScore', 'gameState'] // Примерные ключи для стандартной 2048
-            },
-            {
-                id: 2,
                 title: "Hextris",
                 categories: ["Аркады", "Сложные", "Новые"],
                 icon: "https://hextris.io/images/touch-icon-iphone-retina.png",
@@ -29,7 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 storageKeys: ['hextris-highscore'] // Пример для Hextris
             },
             {
-                id: 3,
+                id: 2,
                 title: "Minesweeper",
                 categories: ["Головоломки", "Классика"],
                 icon: "https://img.icons8.com/emoji/48/bomb-emoji.png",
@@ -37,7 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 storageKeys: ['minesweeper_records_v2']
             },
             {
-                id: 4,
+                id: 3,
                 title: "2048 (моя игра)",
                 categories: ["Новые", "Головоломки"],
                 icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
