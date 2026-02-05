@@ -99,11 +99,26 @@ body {
     background-color: #eee4da; color: #000;
 }
 
-/* Применяем анимацию к внутренней части */
+/* --- Анимации (Новый код) --- */
+
+/* Появление новой плитки */
+@keyframes appear {
+    0% { opacity: 0; transform: scale(0); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+/* Слияние: начинается с нормального размера, увеличивается, возвращается */
+@keyframes pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
 .tile-new .tile-inner {
     animation: appear 200ms ease-in-out backwards;
 }
-/* Важно: z-index, чтобы увеличенная плитка была поверх остальных */
+
+/* Обязательно добавляем z-index, чтобы анимация была поверх всего */
 .tile-merged {
     z-index: 20;
 }
@@ -111,17 +126,6 @@ body {
 .tile-merged .tile-inner {
     animation: pop 200ms ease-in-out backwards;
 }
-
-@keyframes appear {
-    0% { opacity: 0; transform: scale(0); }
-    100% { opacity: 1; transform: scale(1); }
-}
-
-/* ОБНОВЛЕННАЯ Анимация слияния (увеличение -> возврат) */
-@keyframes pop {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.2); } /* Увеличиваем плитку */
-    100% { transform: scale(1); }  /* Возвращаем в исходный размер */
 
 /* Цвета */
 .tile-2 .tile-inner { background: #fff; color: #333; box-shadow: 0 0 2px rgba(0,0,0,0.1); }

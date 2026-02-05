@@ -131,8 +131,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // === КЛАСС ПЛИТКИ ===
+    // === КЛАСС ПЛИТКИ (ОБНОВЛЕННЫЙ) ===
     class Tile {
-        // Добавили merged (булево), чтобы не включать анимацию 'new' для слитых плиток сразу
+        // Добавлен 8-й аргумент isMerged
         constructor(container, value, x, y, cellSize, gap, isRestored = false, isMerged = false) {
             this.container = container;
             this.value = value;
@@ -141,12 +142,12 @@ document.addEventListener('DOMContentLoaded', () => {
             this.cellSize = cellSize;
             this.gap = gap;
             this.mergedToRemove = false;
-            this.mergedFrom = null; // Флаг, что эта плитка - результат слияния
+            this.mergedFrom = null; // Маркер, что плитка получена слиянием
 
             this.element = document.createElement('div');
             this.element.className = `tile tile-${value <= 2048 ? value : 'super'}`;
 
-            // Анимацию "появления" добавляем только если это новая рандомная плитка
+            // Анимацию "появления" ставим ТОЛЬКО если это не восстановление и не слияние
             if (!isRestored && !isMerged) {
                 this.element.classList.add('tile-new');
             }
@@ -161,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         updatePosition() {
-            // Используем translate3d для включения аппаратного ускорения (плавнее на телефонах)
+            // translate3d для плавности на мобильных
             const xPx = this.x * (this.cellSize + this.gap);
             const yPx = this.y * (this.cellSize + this.gap);
             this.element.style.width = `${this.cellSize}px`;
@@ -293,10 +294,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if(!v) return;
 
             let moved = false;
-            // Сбрасываем флаги слияния перед ходом
+            // Сброс флагов и классов анимации перед ходом
             this.tiles.forEach(t => {
                 t.mergedFrom = null;
-                // Важно: убираем класс анимации с прошлого хода, иначе он не сработает повторно
                 t.element.classList.remove('tile-merged');
             });
 
@@ -314,58 +314,50 @@ document.addEventListener('DOMContentLoaded', () => {
                         const other = this.tiles.find(o => o.x===next.x && o.y===next.y && !o.mergedToRemove);
                         if(other) {
                             if(other.value===t.value && !other.mergedFrom) {
-                                // === ЛОГИКА СЛИЯНИЯ ===
-                                // 1. Создаем новую плитку, но передаем true последним аргументом (isMerged)
+                                // === СЛИЯНИЕ ===
+                                // Создаем плитку (isMerged = true)
                                 const merged = new Tile(this.tileContainer, t.value*2, next.x, next.y, this.cellSize, this.gap, false, true);
 
-                                // 2. Скрываем её, пока старые плитки едут
+                                // Скрываем новую плитку, пока старые едут
                                 merged.element.style.opacity = '0';
-                                merged.mergedFrom = true; // Помечаем, что это результат слияния
+                                merged.mergedFrom = true;
 
-                                // 3. Помечаем старые на удаление
-                                t.mergedToRemove=true;
-                                other.mergedToRemove=true;
+                                t.mergedToRemove = true;
+                                other.mergedToRemove = true;
 
-                                // 4. Двигаем старую плитку визуально к новой
-                                t.element.style.zIndex=100; // Поверх всего
-                                t.x=next.x; t.y=next.y;
+                                // Двигаем старую визуально поверх новой
+                                t.element.style.zIndex = 100;
+                                t.x = next.x; t.y = next.y;
                                 t.updatePosition();
 
                                 this.tiles.push(merged);
-                                this.score+=merged.value;
+                                this.score += merged.value;
                                 this.scoreEl.innerText = this.score;
-                                moved=true;
+                                moved = true;
                             }
                             break;
                         }
-                        cell=next;
+                        cell = next;
                     }
-                    if((cell.x!==t.x||cell.y!==t.y)&&!t.mergedToRemove) {
-                        t.x=cell.x; t.y=cell.y; t.updatePosition(); moved=true;
+                    if((cell.x!==t.x || cell.y!==t.y) && !t.mergedToRemove) {
+                        t.x = cell.x; t.y = cell.y; t.updatePosition(); moved = true;
                     }
                 }
             })});
 
-            /* --- script.js (внутри метода move, в блоке setTimeout) --- */
-
             if(moved) {
-                // Ждем пока плитки доедут (150ms)
+                // Ждем окончания движения (150ms)
                 setTimeout(() => {
-                    // 1. Удаляем старые
+                    // Удаляем старые
                     this.tiles.forEach(t => { if(t.mergedToRemove) t.remove() });
                     this.tiles = this.tiles.filter(t => !t.mergedToRemove);
 
-                    // 2. Включаем новые плитки и запускаем анимацию "POP"
+                    // Показываем новые и анимируем "POP"
                     this.tiles.forEach(t => {
                         if (t.mergedFrom) {
-                            // Сначала делаем видимой
                             t.element.style.opacity = '1';
-
-                            // Небольшой хак: форсируем перерисовку браузера (reflow),
-                            // чтобы анимация проигралась гарантированно
+                            // Трюк для перезапуска анимации:
                             void t.element.offsetWidth;
-
-                            // Добавляем класс, который запускает @keyframes pop
                             t.element.classList.add('tile-merged');
                         }
                     });
@@ -374,7 +366,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.save();
 
                     if(!this.movesAvailable()) {
-                        // ... (код окончания игры) ...
                         this.msgEl.innerHTML = `Игра окончена!<br>Счет: ${this.score}`;
                         this.gameOverScreen.classList.add('active');
                         StorageManager.clearState();
@@ -382,6 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }, 150);
             }
+        }
 
         movesAvailable() {
             if(this.tiles.length<16) return true;
