@@ -8,15 +8,15 @@
     --button-text: var(--tg-theme-button-text-color, #ffffff);
 
     /* Игровые параметры */
-    --cell-size: 34px; /* Чуть крупнее для пальца */
+    --cell-size: 34px;
     --gap-size: 3px;
 
     /* Цвета ячеек */
-    --cell-closed: var(--tg-theme-button-color, #3390ec); /* Акцентный цвет закрытых ячеек */
-    --cell-closed-opacity: 0.15; /* Прозрачность для закрытых */
+    --cell-closed: var(--tg-theme-button-color, #3390ec);
+    --cell-closed-opacity: 0.15;
     --cell-open: var(--bg-color);
 
-    /* Цвета цифр (Telegram friendly) */
+    /* Цвета цифр */
     --c1: #3390ec; --c2: #34c759; --c3: #ff3b30; --c4: #5856d6;
     --c5: #af52de; --c6: #ff9500; --c7: #ff2d55; --c8: #8e8e93;
 }
@@ -26,7 +26,11 @@ body {
     background-color: var(--bg-color);
     color: var(--text-color);
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Roboto, Helvetica, Arial, sans-serif;
+
+    /* Глобальный запрет выделения */
     user-select: none;
+    -webkit-user-select: none;
+
     -webkit-tap-highlight-color: transparent;
     height: 100vh; overflow: hidden;
     touch-action: manipulation;
@@ -67,7 +71,6 @@ h1 { margin: 0; font-size: 32px; font-weight: 800; }
     display: flex; justify-content: space-between; align-items: center;
     cursor: pointer;
     text-align: left;
-    transition: background 0.2s;
 }
 .preset-btn:last-child { border-bottom: none; }
 .preset-btn:active { background: var(--secondary-bg); }
@@ -86,9 +89,17 @@ h1 { margin: 0; font-size: 32px; font-weight: 800; }
 }
 h3 { margin: 0 0 15px 0; font-size: 15px; text-transform: uppercase; color: var(--hint-color); font-weight: 700; letter-spacing: 0.5px;}
 
-.inputs-row { display: flex; gap: 10px; margin-bottom: 15px; }
+.inputs-row { display: flex; gap: 10px; margin-bottom: 20px; }
+
+/* Стили для групп инпутов */
+.input-group {
+    display: flex; flex-direction: column; gap: 6px; width: 33%;
+}
+.input-group label {
+    font-size: 12px; color: var(--hint-color); font-weight: 600; text-align: center;
+}
 input {
-    width: 33%; padding: 12px;
+    width: 100%; padding: 12px; box-sizing: border-box;
     border: none;
     border-radius: 10px;
     background: var(--secondary-bg); color: var(--text-color);
@@ -134,13 +145,18 @@ input:focus { box-shadow: 0 0 0 2px var(--button-color); }
 .face-btn { font-size: 26px; background: none; border: none; cursor: pointer; transition: transform 0.2s; }
 .face-btn:active { transform: scale(0.9); }
 
+/* SCROLL WRAPPER (Окно просмотра) */
 .scroll-wrapper {
-    flex: 1; overflow: auto;
+    flex: 1;
+    overflow: auto; /* Нативный скролл */
     display: flex; align-items: center; justify-content: center;
     background: var(--secondary-bg);
     padding: 20px;
-    /* Убираем стандартный скроллбар */
-    scrollbar-width: none;
+    cursor: grab; /* Курсор для ПК */
+}
+.scroll-wrapper.grabbing {
+    cursor: grabbing;
+    user-select: none;
 }
 .scroll-wrapper::-webkit-scrollbar { display: none; }
 
@@ -152,13 +168,14 @@ input:focus { box-shadow: 0 0 0 2px var(--button-color); }
     margin: auto;
     background: transparent;
     user-select: none;
-    touch-action: none; /* Важно для своей обработки тачей */
+    /* Убираем touch-action: none, чтобы работал скролл.
+       События игры (флаги) мы перехватываем JS-ом */
 }
 
 /* СТИЛЬ ЯЧЕЙКИ */
 .cell {
     width: var(--cell-size); height: var(--cell-size);
-    background-color: rgba(120, 120, 128, 0.16); /* Нейтральный серый */
+    background-color: rgba(120, 120, 128, 0.16);
     border-radius: 6px;
     display: flex; justify-content: center; align-items: center;
     font-size: 20px; font-weight: 800; cursor: pointer;
@@ -168,28 +185,25 @@ input:focus { box-shadow: 0 0 0 2px var(--button-color); }
 }
 
 /* Эффект нажатия (пальцем или кликом) */
-.cell:active, .cell.pressing {
+.cell:active:not(.open), .cell.pressing {
     transform: scale(0.92);
     background-color: rgba(120, 120, 128, 0.25);
 }
 
-/* Открытая ячейка */
 .cell.open {
     background-color: var(--bg-color);
     cursor: default;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.06);
-    transform: none; /* Не сжимается при клике если открыта */
+    transform: none;
     animation: pop-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* Флаг */
 .cell.flagged { color: #ff3b30; }
 
-/* Мина */
 .cell.mine {
     background-color: #ff3b30 !important;
     color: #fff !important;
-    border-radius: 8px; /* Чуть круглее при взрыве */
+    border-radius: 8px;
     box-shadow: 0 2px 10px rgba(255, 59, 48, 0.4);
     z-index: 2;
 }
@@ -199,7 +213,6 @@ input:focus { box-shadow: 0 0 0 2px var(--button-color); }
     animation: fade-in-scale 0.3s ease-out backwards;
 }
 
-/* Ошибка флага */
 .cell.wrong-flag {
     background-color: rgba(255, 59, 48, 0.1);
     position: relative;
@@ -212,7 +225,6 @@ input:focus { box-shadow: 0 0 0 2px var(--button-color); }
     opacity: 0.7;
 }
 
-/* Ошибка аккорда (мигание) */
 .cell.chord-error {
     animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
 }
@@ -245,7 +257,6 @@ input:focus { box-shadow: 0 0 0 2px var(--button-color); }
 .result-time { font-size: 32px; font-weight: 700; font-family: monospace; margin: 10px 0 25px; letter-spacing: -1px; }
 .overlay-buttons { display: flex; flex-direction: column; gap: 12px; }
 
-/* АНИМАЦИИ */
 @keyframes pop-in {
     0% { transform: scale(0.5); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }

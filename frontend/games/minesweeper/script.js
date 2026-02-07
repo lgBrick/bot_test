@@ -1,12 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
     const tg = window.Telegram.WebApp;
     tg.ready();
-    // Расширяем на весь экран
     if (tg.expand) tg.expand();
-    // Блокируем вертикальный свайп закрытия (если поддерживается)
     if (tg.enableClosingConfirmation) tg.enableClosingConfirmation();
 
-    // Haptic wrapper
     function haptic(type) {
         if (!tg.HapticFeedback) return;
         if (type === 'light') tg.HapticFeedback.impactOccurred('light');
@@ -17,7 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (type === 'selection') tg.HapticFeedback.selectionChanged();
     }
 
-    // === КОНФИГУРАЦИЯ ===
     const PRESETS = {
         beginner: { rows: 9, cols: 9, mines: 10 },
         amateur: { rows: 16, cols: 16, mines: 40 },
@@ -29,7 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
         EXPERT: 'minesweeper_best_expert'
     };
 
-    // === МЕНЕДЖЕР СОХРАНЕНИЙ (CLOUD + LOCAL) ===
     const StorageManager = {
         getKey(mode) {
             if (mode === 'beginner') return KEYS.BEGINNER;
@@ -37,63 +32,45 @@ document.addEventListener('DOMContentLoaded', () => {
             if (mode === 'expert') return KEYS.EXPERT;
             return null;
         },
-
         saveScore(mode, timeMs) {
             const key = this.getKey(mode);
-            if (!key) return; // Кастом не сохраняем
-
-            // 1. Сохраняем локально мгновенно
+            if (!key) return;
             let currentLocal = parseInt(localStorage.getItem(key)) || Infinity;
             if (timeMs < currentLocal) {
                 localStorage.setItem(key, timeMs);
-                console.log(`[Local] New Record: ${timeMs}`);
             }
-
-            // 2. Пробуем сохранить в облако
             if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
                 tg.CloudStorage.getItem(key, (err, val) => {
                     let cloudVal = val ? parseInt(val) : Infinity;
                     if (timeMs < cloudVal) {
-                        tg.CloudStorage.setItem(key, timeMs.toString(), (e) => {
-                            if(!e) console.log(`[Cloud] Saved: ${timeMs}`);
-                        });
+                        tg.CloudStorage.setItem(key, timeMs.toString());
                     }
                 });
             }
         },
-
         syncScores(callback) {
-            // Проходимся по всем режимам
             const modes = ['beginner', 'amateur', 'expert'];
             let processed = 0;
-
             modes.forEach(mode => {
                 const key = this.getKey(mode);
-                // Берем локальное
                 let localVal = parseInt(localStorage.getItem(key)) || null;
-
                 if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
                     tg.CloudStorage.getItem(key, (err, cloudStr) => {
                         let cloudVal = cloudStr ? parseInt(cloudStr) : null;
-
-                        // Логика слияния: лучшее время (меньшее) побеждает
                         if (cloudVal !== null && (localVal === null || cloudVal < localVal)) {
-                            localStorage.setItem(key, cloudVal); // Облако круче -> обновляем локалку
+                            localStorage.setItem(key, cloudVal);
                         } else if (localVal !== null && (cloudVal === null || localVal < cloudVal)) {
-                            tg.CloudStorage.setItem(key, localVal.toString()); // Локалка круче -> пушим в облако
+                            tg.CloudStorage.setItem(key, localVal.toString());
                         }
-
                         processed++;
                         if (processed === modes.length && callback) callback();
                     });
                 } else {
-                    // Если нет облака, просто считаем что готово
                     processed++;
                     if (processed === modes.length && callback) callback();
                 }
             });
         },
-
         getBestTime(mode) {
             const key = this.getKey(mode);
             if (!key) return null;
@@ -101,7 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // === ЭЛЕМЕНТЫ UI ===
     const UI = {
         menu: document.getElementById('menu-screen'),
         game: document.getElementById('game-screen'),
@@ -116,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resultEmoji: document.getElementById('result-emoji'),
         overlayRestart: document.getElementById('overlay-restart-btn'),
         overlayMenu: document.getElementById('overlay-menu-btn'),
+        scrollWrapper: document.getElementById('scroll-wrapper'),
         inputs: {
             c: document.getElementById('custom-cols'),
             r: document.getElementById('custom-rows'),
@@ -123,7 +100,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // === СОСТОЯНИЕ ИГРЫ ===
     let state = {
         config: {},
         grid: [],
@@ -135,15 +111,12 @@ document.addEventListener('DOMContentLoaded', () => {
         timerInt: null,
         flags: 0,
         longPressTimer: null,
-        touchStartPos: null
+        touchStartPos: null,
+        isScrolling: false // Флаг для отличия клика от драга
     };
 
-    // === ИНИЦИАЛИЗАЦИЯ ===
     function init() {
-        // Синхронизируем рекорды при запуске
-        StorageManager.syncScores(() => {
-            updateMenuScores();
-        });
+        StorageManager.syncScores(() => { updateMenuScores(); });
 
         document.querySelectorAll('.preset-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -153,10 +126,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         document.getElementById('start-custom-btn').addEventListener('click', () => {
-            const cols = clamp(UI.inputs.c.value, 5, 30);
-            const rows = clamp(UI.inputs.r.value, 5, 30);
-            const maxMines = Math.floor(cols * rows * 0.85);
-            const mines = clamp(UI.inputs.m.value, 1, maxMines);
+            // Валидация
+            const cols = clamp(UI.inputs.c.value, 10, 99);
+            const rows = clamp(UI.inputs.r.value, 10, 99);
+            const mines = clamp(UI.inputs.m.value, 1, 99);
+
+            // Проверка: Мины < Ячейки
+            if (mines >= rows * cols) {
+                tg.showAlert(`Слишком много мин! Максимум для поля ${cols}x${rows}: ${rows*cols - 1}`);
+                return;
+            }
+
             haptic('light');
             startGame('custom', { cols, rows, mines });
         });
@@ -165,13 +145,17 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.overlayRestart.onclick = () => { haptic('medium'); restartGame(); };
         UI.backBtn.onclick = () => { haptic('light'); showMenu(); };
         UI.overlayMenu.onclick = () => { haptic('light'); showMenu(); };
+
+        setupDesktopDragScroll();
     }
 
     function clamp(val, min, max) {
-        return Math.min(Math.max(parseInt(val) || min, min), max);
+        let v = parseInt(val) || min;
+        return Math.min(Math.max(v, min), max);
     }
 
-    // === УПРАВЛЕНИЕ ИГРОЙ ===
+    // === ЛОГИКА ИГРЫ ===
+
     function startGame(mode, config) {
         state.mode = mode;
         state.config = config;
@@ -190,7 +174,8 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.timer.innerText = '00:00';
         UI.restartBtn.innerText = '🙂';
 
-        createEmptyGrid(); // Рисуем сетку, но логику не генерируем до клика
+        // Генерируем поле СРАЗУ (случайно, без сейв-зоны)
+        generateBoard();
         updateHeader();
     }
 
@@ -207,90 +192,50 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMenuScores();
     }
 
-    // === ГЕНЕРАЦИЯ ПОЛЯ (NO GUESSING) ===
-    function createEmptyGrid() {
+    function generateBoard() {
         const { rows, cols } = state.config;
         UI.grid.innerHTML = '';
         UI.grid.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
 
+        // 1. Создаем структуру
         state.grid = [];
         for (let r = 0; r < rows; r++) {
             let row = [];
             for (let c = 0; c < cols; c++) {
-                // Объект ячейки
                 let cell = { r, c, isMine: false, isOpen: false, isFlagged: false, val: 0 };
                 row.push(cell);
 
-                // DOM элемент
                 const el = document.createElement('div');
                 el.className = 'cell';
                 el.id = `c-${r}-${c}`;
 
-                // --- НОВАЯ СИСТЕМА СОБЫТИЙ ДЛЯ МОБИЛОК ---
-                // Мышь
+                // События
                 el.addEventListener('mousedown', (e) => handleMouse(e, cell));
-                el.addEventListener('contextmenu', (e) => { e.preventDefault(); }); // Блокируем меню
+                el.addEventListener('contextmenu', (e) => { e.preventDefault(); });
 
-                // Тач (с поддержкой long press и dead zone)
+                // Touch
                 el.addEventListener('touchstart', (e) => handleTouchStart(e, cell, el), {passive: false});
-                el.addEventListener('touchmove', (e) => handleTouchMove(e, el), {passive: false});
+                el.addEventListener('touchmove', (e) => handleTouchMove(e, el), {passive: false}); // passive: false не обязателен, если не делаем preventDefault
                 el.addEventListener('touchend', (e) => handleTouchEnd(e, cell, el), {passive: false});
 
                 UI.grid.appendChild(el);
             }
             state.grid.push(row);
         }
+
+        // 2. Расставляем мины (Абсолютный рандом)
+        placeMines(state.grid);
+
+        // 3. Считаем цифры
+        calcNumbers(state.grid);
     }
 
-    function generateBoard(startR, startC) {
-        // Пытаемся сгенерировать решаемое поле
-        let attempts = 0;
-        while (attempts < 50) {
-            let grid = createBaseGridStructure();
-            placeMines(grid, startR, startC);
-            calcNumbers(grid);
-
-            // Критерий 1: Первая клетка должна быть 0 (открытие области)
-            if (grid[startR][startC].val !== 0) {
-                attempts++; continue;
-            }
-
-            // Критерий 2: Поле должно решаться логически
-            if (isSolvable(grid, startR, startC)) {
-                return grid;
-            }
-            attempts++;
-        }
-
-        // Фолбэк (если не вышло за 50 попыток, даем просто поле с 0 на старте)
-        let fallback = createBaseGridStructure();
-        placeMines(fallback, startR, startC);
-        calcNumbers(fallback);
-        // Зачищаем старт если там не 0 (грубая сила для фолбэка)
-        if (fallback[startR][startC].val !== 0) {
-           // В редком случае просто вернем что есть, игрок поймет
-        }
-        return fallback;
-    }
-
-    function createBaseGridStructure() {
-        const { rows, cols } = state.config;
-        return Array.from({length: rows}, (_, r) =>
-            Array.from({length: cols}, (_, c) => ({
-                r, c, isMine: false, isOpen: false, isFlagged: false, val: 0
-            }))
-        );
-    }
-
-    function placeMines(grid, safeR, safeC) {
+    function placeMines(grid) {
         const { rows, cols, mines } = state.config;
         let placed = 0;
         while(placed < mines) {
             let r = Math.floor(Math.random() * rows);
             let c = Math.floor(Math.random() * cols);
-
-            // Защитная зона 3x3 вокруг старта для гарантированного нуля или 5x5 для простоты
-            if (Math.abs(r - safeR) <= 1 && Math.abs(c - safeC) <= 1) continue;
 
             if (!grid[r][c].isMine) {
                 grid[r][c].isMine = true;
@@ -307,82 +252,90 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
     }
 
-    // Простой решатель
-    function isSolvable(grid, startR, startC) {
-        let simGrid = grid.map(row => row.map(c => ({...c})));
-        let changed = true;
-        openSim(simGrid, startR, startC);
+    // === УПРАВЛЕНИЕ DESKTOP DRAG SCROLL ===
+    function setupDesktopDragScroll() {
+        const wrapper = UI.scrollWrapper;
+        let isDown = false;
+        let startX, startY;
+        let scrollLeft, scrollTop;
 
-        while(changed) {
-            changed = false;
-            for(let r=0; r<simGrid.length; r++) {
-                for(let c=0; c<simGrid[0].length; c++) {
-                    let cell = simGrid[r][c];
-                    if(cell.isOpen && cell.val > 0) {
-                        let neighbors = getNeighbors(simGrid, r, c);
-                        let hidden = neighbors.filter(n => !n.isOpen);
-                        let flagged = neighbors.filter(n => n.isFlagged);
-                        // Флаги
-                        if(hidden.length > 0 && hidden.length === cell.val - flagged.length) {
-                            hidden.forEach(n => { if(!n.isFlagged) { n.isFlagged = true; changed = true; } });
-                        }
-                        // Открытие
-                        if(flagged.length === cell.val && hidden.length > flagged.length) {
-                            hidden.forEach(n => { if(!n.isFlagged && !n.isOpen) { openSim(simGrid, n.r, n.c); changed = true; } });
-                        }
-                    }
-                }
+        wrapper.addEventListener('mousedown', (e) => {
+            // Если клик правой кнопкой - игнорируем драг
+            if (e.button !== 0) return;
+            isDown = true;
+            state.isScrolling = false; // Сброс
+            wrapper.classList.add('grabbing');
+            startX = e.pageX - wrapper.offsetLeft;
+            startY = e.pageY - wrapper.offsetTop;
+            scrollLeft = wrapper.scrollLeft;
+            scrollTop = wrapper.scrollTop;
+        });
+
+        wrapper.addEventListener('mouseleave', () => {
+            isDown = false;
+            wrapper.classList.remove('grabbing');
+        });
+
+        wrapper.addEventListener('mouseup', () => {
+            isDown = false;
+            wrapper.classList.remove('grabbing');
+            // isScrolling остается true, если мы двигали, чтобы click handler понял это
+            setTimeout(() => { state.isScrolling = false; }, 50);
+        });
+
+        wrapper.addEventListener('mousemove', (e) => {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - wrapper.offsetLeft;
+            const y = e.pageY - wrapper.offsetTop;
+            const walkX = (x - startX);
+            const walkY = (y - startY);
+
+            // Если сдвинули хоть немного - считаем это скроллом, а не кликом
+            if (Math.abs(walkX) > 5 || Math.abs(walkY) > 5) {
+                state.isScrolling = true;
+                wrapper.scrollLeft = scrollLeft - walkX;
+                wrapper.scrollTop = scrollTop - walkY;
             }
-        }
-        return !simGrid.some(row => row.some(c => !c.isMine && !c.isOpen));
+        });
     }
 
-    function openSim(grid, r, c) {
-        if(grid[r][c].isOpen || grid[r][c].isFlagged) return;
-        grid[r][c].isOpen = true;
-        if(grid[r][c].val === 0) {
-            getNeighbors(grid, r, c).forEach(n => openSim(grid, n.r, n.c));
-        }
-    }
+    // === ОБРАБОТКА ВВОДА ЯЧЕЕК ===
 
-    // === ОБРАБОТКА ВВОДА (TOUCH & MOUSE) ===
-
-    // Мышь (десктоп)
     function handleMouse(e, cell) {
+        // Если мы скроллили (drag), то клик не должен сработать
+        if (state.isScrolling) return;
         if (state.over) return;
-        if (e.button === 0) handleClick(cell); // ЛКМ
-        else if (e.button === 2) toggleFlag(cell); // ПКМ
+
+        if (e.button === 0) handleClick(cell);
+        else if (e.button === 2) toggleFlag(cell);
     }
 
-    // Тач (мобильные)
+    // --- Touch Logic ---
     function handleTouchStart(e, cell, el) {
         if (state.over) return;
-        if (cell.isOpen && cell.val === 0) return; // Пустые открытые не трогаем
+        // Не preventDefault(), чтобы работал нативный скролл!
 
-        // Запоминаем позицию для Dead Zone
+        if (cell.isOpen && cell.val === 0) return;
+
         state.touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-
-        // Визуальный эффект нажатия
         el.classList.add('pressing');
 
-        // Таймер для флага (Long Press)
         state.longPressTimer = setTimeout(() => {
             state.longPressTimer = null;
             el.classList.remove('pressing');
             toggleFlag(cell);
-            haptic('medium'); // Вибрация при установке флага
-        }, 350); // 350мс удержание
+            haptic('medium');
+        }, 350);
     }
 
     function handleTouchMove(e, el) {
         if (!state.touchStartPos) return;
         const x = e.touches[0].clientX;
         const y = e.touches[0].clientY;
-
-        // Расстояние сдвига пальца
         const dist = Math.hypot(x - state.touchStartPos.x, y - state.touchStartPos.y);
 
-        // Если сдвинули больше чем на 10px -> отменяем Long Press
+        // Если сдвинули палец > 10px, считаем это скроллом -> отменяем игровые действия
         if (dist > 10) {
             clearTimeout(state.longPressTimer);
             state.longPressTimer = null;
@@ -394,48 +347,46 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleTouchEnd(e, cell, el) {
         el.classList.remove('pressing');
 
-        // Если таймер еще жив -> значит это был короткий тап
         if (state.longPressTimer) {
+            // Если таймер не сработал (значит палец подняли быстро)
             clearTimeout(state.longPressTimer);
             state.longPressTimer = null;
-            // Если тач не был отменен мувом
+
+            // Если это не был свайп (touchStartPos не null)
             if (state.touchStartPos) {
+                // ВАЖНО: Предотвращаем дефолтный клик браузера, т.к. мы обработали тап
+                if (e.cancelable) e.preventDefault();
                 haptic('light');
                 handleClick(cell);
             }
         }
         state.touchStartPos = null;
-        e.preventDefault(); // Чтоб не было клика мыши следом
     }
 
-
-    // === ЛОГИКА ДЕЙСТВИЙ ===
-
+    // === ДЕЙСТВИЯ ===
     function handleClick(cell) {
         if (state.over || state.won || cell.isFlagged) return;
 
-        // Генерация при первом клике
         if (!state.started) {
             state.started = true;
             startTimer();
-            state.grid = generateBoard(cell.r, cell.c);
         }
 
         const activeCell = state.grid[cell.r][cell.c];
-
-        // Аккорд
         if (activeCell.isOpen) {
             tryChord(activeCell);
             return;
         }
-
         openCell(activeCell);
     }
 
     function toggleFlag(cell) {
-        if (!state.started || state.over || cell.isOpen) return;
-        const activeCell = state.grid[cell.r][cell.c]; // Актуальная ячейка из state
+        if (!state.started && !state.over) {
+            state.started = true; startTimer();
+        }
+        if (state.over || cell.isOpen) return;
 
+        const activeCell = state.grid[cell.r][cell.c];
         activeCell.isFlagged = !activeCell.isFlagged;
         state.flags += activeCell.isFlagged ? 1 : -1;
 
@@ -450,7 +401,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const flags = neighbors.filter(n => n.isFlagged).length;
 
         if (flags === cell.val) {
-            // Флагов хватает -> открываем
             let triggered = false;
             neighbors.forEach(n => {
                 if (!n.isOpen && !n.isFlagged) {
@@ -460,11 +410,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if(triggered) haptic('medium');
         } else {
-            // Флагов мало или много -> ошибка (визуал)
             const el = document.getElementById(`c-${cell.r}-${cell.c}`);
             if (el) {
                 el.classList.remove('chord-error');
-                void el.offsetWidth; // Reflow
+                void el.offsetWidth;
                 el.classList.add('chord-error');
                 haptic('error');
             }
@@ -483,7 +432,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (cell.val === 0) {
-            // Рекурсивное открытие пустых
             getNeighbors(state.grid, cell.r, cell.c).forEach(n => openCell(n));
         }
 
@@ -494,7 +442,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const { rows, cols, mines } = state.config;
         let opened = 0;
         state.grid.forEach(r => r.forEach(c => { if(c.isOpen) opened++; }));
-
         if (opened === (rows * cols - mines)) {
             gameOver(true);
         }
@@ -510,7 +457,6 @@ document.addEventListener('DOMContentLoaded', () => {
             UI.resultEmoji.innerText = '😎';
             UI.resultTitle.innerText = 'Победа!';
             haptic('success');
-            // Сохраняем время
             let timeMs = Date.now() - state.startTime;
             StorageManager.saveScore(state.mode, timeMs);
         } else {
@@ -518,51 +464,38 @@ document.addEventListener('DOMContentLoaded', () => {
             UI.resultEmoji.innerText = '💥';
             UI.resultTitle.innerText = 'Взрыв!';
             haptic('error');
-
-            // Анимация показа мин
             revealMinesWave();
         }
-
         UI.resultTime.innerText = UI.timer.innerText;
         setTimeout(() => UI.overlay.classList.remove('hidden'), 1200);
     }
 
     function revealMinesWave() {
-        // Собираем все мины и неправильные флаги
         let targets = [];
         state.grid.forEach(r => r.forEach(c => {
             if (c.isMine && !c.isFlagged) targets.push({c, type: 'mine'});
             else if (!c.isMine && c.isFlagged) targets.push({c, type: 'wrong'});
         }));
-
-        // Перемешиваем для красоты или идем по порядку. По порядку "волной" лучше.
-        // Сортируем по расстоянию от левого верха для волны
         targets.sort((a,b) => (a.c.r + a.c.c) - (b.c.r + b.c.c));
-
         targets.forEach((item, index) => {
             setTimeout(() => {
                 const el = document.getElementById(`c-${item.c.r}-${item.c.c}`);
                 if (!el) return;
-
                 if (item.type === 'mine') {
                     el.classList.add('mine', 'revealed-mine');
                     el.innerText = '💣';
                 } else {
                     el.classList.add('wrong-flag');
                 }
-            }, index * 15); // Задержка для волны
+            }, index * 15);
         });
     }
 
-    // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
     function updateVisual(cell) {
         const el = document.getElementById(`c-${cell.r}-${cell.c}`);
         if (!el) return;
-
-        // Сброс классов
         el.className = 'cell';
         el.innerText = '';
-
         if (cell.isOpen) {
             el.classList.add('open');
             if (cell.isMine) {

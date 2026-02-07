@@ -14,7 +14,7 @@
         <div id="menu-screen">
             <div class="menu-header">
                 <h1>Сапер</h1>
-                <p class="subtitle">Без гаданий • Telegram Style</p>
+                <p class="subtitle">Random • Telegram Style</p>
             </div>
 
             <div class="presets-list">
@@ -55,9 +55,18 @@
             <div class="custom-section">
                 <h3>Своя игра</h3>
                 <div class="inputs-row">
-                    <input type="number" id="custom-cols" placeholder="Шир" min="5" max="30" value="10">
-                    <input type="number" id="custom-rows" placeholder="Выс" min="5" max="30" value="10">
-                    <input type="number" id="custom-mines" placeholder="Мины" min="1" value="15">
+                    <div class="input-group">
+                        <label for="custom-cols">Ширина</label>
+                        <input type="number" id="custom-cols" placeholder="10-99" min="10" max="99" value="10">
+                    </div>
+                    <div class="input-group">
+                        <label for="custom-rows">Высота</label>
+                        <input type="number" id="custom-rows" placeholder="10-99" min="10" max="99" value="10">
+                    </div>
+                    <div class="input-group">
+                        <label for="custom-mines">Мины</label>
+                        <input type="number" id="custom-mines" placeholder="1-99" min="1" max="99" value="15">
+                    </div>
                 </div>
                 <button id="start-custom-btn" class="action-btn">Играть</button>
             </div>
@@ -79,7 +88,8 @@
                 <button class="face-btn" id="restart-btn">🙂</button>
             </div>
 
-            <div class="scroll-wrapper">
+            <!-- Scroll Wrapper -->
+            <div class="scroll-wrapper" id="scroll-wrapper">
                 <div class="grid-container" id="grid"></div>
             </div>
         </div>
