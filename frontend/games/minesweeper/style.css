@@ -149,14 +149,13 @@ input:focus { box-shadow: 0 0 0 2px var(--button-color); }
 .scroll-wrapper {
     flex: 1;
     overflow: auto; /* Нативный скролл */
-    display: flex; align-items: center; justify-content: center;
+    display: flex;
+    /* Ключевое изменение для фикса скролла влево на мобилках: */
+    /* Не используем justify-content: center для flex-контейнера. */
+    /* Центрирование делает margin: auto у ребенка. */
     background: var(--secondary-bg);
     padding: 20px;
-    cursor: grab; /* Курсор для ПК */
-}
-.scroll-wrapper.grabbing {
-    cursor: grabbing;
-    user-select: none;
+    position: relative;
 }
 .scroll-wrapper::-webkit-scrollbar { display: none; }
 
@@ -165,11 +164,9 @@ input:focus { box-shadow: 0 0 0 2px var(--button-color); }
     gap: var(--gap-size);
     padding: 10px;
     border-radius: 12px;
-    margin: auto;
+    margin: auto; /* Если контент меньше экрана - центр, если больше - корректный скролл */
     background: transparent;
     user-select: none;
-    /* Убираем touch-action: none, чтобы работал скролл.
-       События игры (флаги) мы перехватываем JS-ом */
 }
 
 /* СТИЛЬ ЯЧЕЙКИ */

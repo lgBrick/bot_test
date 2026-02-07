@@ -51,23 +51,30 @@ document.addEventListener('DOMContentLoaded', () => {
         syncScores(callback) {
             const modes = ['beginner', 'amateur', 'expert'];
             let processed = 0;
+            const finish = () => {
+                processed++;
+                // Вызываем колбек, когда обработали все режимы
+                if (processed === modes.length && callback) callback();
+            };
+
             modes.forEach(mode => {
                 const key = this.getKey(mode);
                 let localVal = parseInt(localStorage.getItem(key)) || null;
+
                 if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
                     tg.CloudStorage.getItem(key, (err, cloudStr) => {
                         let cloudVal = cloudStr ? parseInt(cloudStr) : null;
+
+                        // Логика синхронизации: побеждает лучшее время (меньшее)
                         if (cloudVal !== null && (localVal === null || cloudVal < localVal)) {
                             localStorage.setItem(key, cloudVal);
                         } else if (localVal !== null && (cloudVal === null || localVal < cloudVal)) {
                             tg.CloudStorage.setItem(key, localVal.toString());
                         }
-                        processed++;
-                        if (processed === modes.length && callback) callback();
+                        finish();
                     });
                 } else {
-                    processed++;
-                    if (processed === modes.length && callback) callback();
+                    finish();
                 }
             });
         },
@@ -112,10 +119,14 @@ document.addEventListener('DOMContentLoaded', () => {
         flags: 0,
         longPressTimer: null,
         touchStartPos: null,
-        isScrolling: false // Флаг для отличия клика от драга
+        // Для управления клавиатурой
+        keysPressed: {}
     };
 
     function init() {
+        // Сразу обновляем из локалстораджа, чтобы не было пустоты
+        updateMenuScores();
+        // Затем синхронизируем с облаком и обновляем еще раз
         StorageManager.syncScores(() => { updateMenuScores(); });
 
         document.querySelectorAll('.preset-btn').forEach(btn => {
@@ -125,20 +136,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
+        setupCustomInputs();
+
         document.getElementById('start-custom-btn').addEventListener('click', () => {
-            // Валидация
-            const cols = clamp(UI.inputs.c.value, 10, 99);
-            const rows = clamp(UI.inputs.r.value, 10, 99);
-            const mines = clamp(UI.inputs.m.value, 1, 99);
-
-            // Проверка: Мины < Ячейки
-            if (mines >= rows * cols) {
-                tg.showAlert(`Слишком много мин! Максимум для поля ${cols}x${rows}: ${rows*cols - 1}`);
-                return;
-            }
-
-            haptic('light');
-            startGame('custom', { cols, rows, mines });
+            handleCustomStart();
         });
 
         UI.restartBtn.onclick = () => { haptic('medium'); restartGame(); };
@@ -146,12 +147,51 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.backBtn.onclick = () => { haptic('light'); showMenu(); };
         UI.overlayMenu.onclick = () => { haptic('light'); showMenu(); };
 
-        setupDesktopDragScroll();
+        setupKeyboardScroll();
     }
 
-    function clamp(val, min, max) {
-        let v = parseInt(val) || min;
-        return Math.min(Math.max(v, min), max);
+    // === CUSTOM GAME LOGIC ===
+
+    function setupCustomInputs() {
+        const { c, r } = UI.inputs;
+
+        // Авто-коррекция при вводе: не даем ввести больше 30
+        const enforceMax = (e) => {
+            if (e.target.value > 30) e.target.value = 30;
+        };
+
+        // Коррекция при потере фокуса: не даем ввести меньше 2
+        const enforceMin = (e) => {
+            let val = parseInt(e.target.value);
+            if (isNaN(val) || val < 2) e.target.value = 2;
+        };
+
+        [c, r].forEach(input => {
+            input.addEventListener('input', enforceMax);
+            input.addEventListener('change', enforceMin);
+            input.addEventListener('blur', enforceMin);
+        });
+    }
+
+    function handleCustomStart() {
+        let cols = parseInt(UI.inputs.c.value);
+        let rows = parseInt(UI.inputs.r.value);
+        let mines = parseInt(UI.inputs.m.value);
+
+        // Финальная валидация "защита от дурака"
+        if (cols < 2 || cols > 30 || rows < 2 || rows > 30) {
+            tg.showAlert("Размер поля должен быть от 2 до 30!");
+            return;
+        }
+
+        const maxMines = (rows * cols) - 1;
+        if (mines < 1 || mines > maxMines) {
+            tg.showAlert(`Количество мин должно быть от 1 до ${maxMines} (чтобы осталась хотя бы одна пустая клетка).`);
+            return;
+        }
+
+        haptic('light');
+        startGame('custom', { cols, rows, mines });
     }
 
     // === ЛОГИКА ИГРЫ ===
@@ -174,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.timer.innerText = '00:00';
         UI.restartBtn.innerText = '🙂';
 
-        // Генерируем поле СРАЗУ (случайно, без сейв-зоны)
+        // Генерируем поле
         generateBoard();
         updateHeader();
     }
@@ -197,7 +237,6 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.grid.innerHTML = '';
         UI.grid.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
 
-        // 1. Создаем структуру
         state.grid = [];
         for (let r = 0; r < rows; r++) {
             let row = [];
@@ -209,13 +248,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 el.className = 'cell';
                 el.id = `c-${r}-${c}`;
 
-                // События
+                // Mouse events
                 el.addEventListener('mousedown', (e) => handleMouse(e, cell));
                 el.addEventListener('contextmenu', (e) => { e.preventDefault(); });
 
-                // Touch
+                // Touch events
                 el.addEventListener('touchstart', (e) => handleTouchStart(e, cell, el), {passive: false});
-                el.addEventListener('touchmove', (e) => handleTouchMove(e, el), {passive: false}); // passive: false не обязателен, если не делаем preventDefault
+                el.addEventListener('touchmove', (e) => handleTouchMove(e, el), {passive: false});
                 el.addEventListener('touchend', (e) => handleTouchEnd(e, cell, el), {passive: false});
 
                 UI.grid.appendChild(el);
@@ -223,10 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.grid.push(row);
         }
 
-        // 2. Расставляем мины (Абсолютный рандом)
         placeMines(state.grid);
-
-        // 3. Считаем цифры
         calcNumbers(state.grid);
     }
 
@@ -252,61 +288,71 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
     }
 
-    // === УПРАВЛЕНИЕ DESKTOP DRAG SCROLL ===
-    function setupDesktopDragScroll() {
-        const wrapper = UI.scrollWrapper;
-        let isDown = false;
-        let startX, startY;
-        let scrollLeft, scrollTop;
+    // === УПРАВЛЕНИЕ WASD (DESKTOP) ===
 
-        wrapper.addEventListener('mousedown', (e) => {
-            // Если клик правой кнопкой - игнорируем драг
-            if (e.button !== 0) return;
-            isDown = true;
-            state.isScrolling = false; // Сброс
-            wrapper.classList.add('grabbing');
-            startX = e.pageX - wrapper.offsetLeft;
-            startY = e.pageY - wrapper.offsetTop;
-            scrollLeft = wrapper.scrollLeft;
-            scrollTop = wrapper.scrollTop;
-        });
+    function setupKeyboardScroll() {
+        // Слушаем нажатия клавиш
+        document.addEventListener('keydown', (e) => {
+            // Если игра скрыта, не скроллим
+            if (UI.game.classList.contains('hidden')) return;
 
-        wrapper.addEventListener('mouseleave', () => {
-            isDown = false;
-            wrapper.classList.remove('grabbing');
-        });
+            // Если фокус в инпутах, не перехватываем
+            if (e.target.tagName === 'INPUT') return;
 
-        wrapper.addEventListener('mouseup', () => {
-            isDown = false;
-            wrapper.classList.remove('grabbing');
-            // isScrolling остается true, если мы двигали, чтобы click handler понял это
-            setTimeout(() => { state.isScrolling = false; }, 50);
-        });
+            const key = e.key.toLowerCase();
+            const validKeys = ['w', 'a', 's', 'd', 'arrowup', 'arrowleft', 'arrowdown', 'arrowright'];
 
-        wrapper.addEventListener('mousemove', (e) => {
-            if (!isDown) return;
-            e.preventDefault();
-            const x = e.pageX - wrapper.offsetLeft;
-            const y = e.pageY - wrapper.offsetTop;
-            const walkX = (x - startX);
-            const walkY = (y - startY);
-
-            // Если сдвинули хоть немного - считаем это скроллом, а не кликом
-            if (Math.abs(walkX) > 5 || Math.abs(walkY) > 5) {
-                state.isScrolling = true;
-                wrapper.scrollLeft = scrollLeft - walkX;
-                wrapper.scrollTop = scrollTop - walkY;
+            if (validKeys.includes(key)) {
+                state.keysPressed[key] = true;
+                if (!state.isScrollingLoop) {
+                    state.isScrollingLoop = true;
+                    requestAnimationFrame(scrollLoop);
+                }
             }
         });
+
+        document.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            state.keysPressed[key] = false;
+        });
     }
+
+    function scrollLoop() {
+        const speed = 15; // Скорость скролла
+        const wrapper = UI.scrollWrapper;
+        let move = false;
+
+        if (state.keysPressed['w'] || state.keysPressed['arrowup']) {
+            wrapper.scrollTop -= speed;
+            move = true;
+        }
+        if (state.keysPressed['s'] || state.keysPressed['arrowdown']) {
+            wrapper.scrollTop += speed;
+            move = true;
+        }
+        if (state.keysPressed['a'] || state.keysPressed['arrowleft']) {
+            wrapper.scrollLeft -= speed;
+            move = true;
+        }
+        if (state.keysPressed['d'] || state.keysPressed['arrowright']) {
+            wrapper.scrollLeft += speed;
+            move = true;
+        }
+
+        // Проверяем, нажата ли хоть одна клавиша, чтобы продолжить цикл
+        const anyPressed = Object.values(state.keysPressed).some(v => v);
+        if (anyPressed) {
+            requestAnimationFrame(scrollLoop);
+        } else {
+            state.isScrollingLoop = false;
+        }
+    }
+
 
     // === ОБРАБОТКА ВВОДА ЯЧЕЕК ===
 
     function handleMouse(e, cell) {
-        // Если мы скроллили (drag), то клик не должен сработать
-        if (state.isScrolling) return;
         if (state.over) return;
-
         if (e.button === 0) handleClick(cell);
         else if (e.button === 2) toggleFlag(cell);
     }
@@ -314,8 +360,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Touch Logic ---
     function handleTouchStart(e, cell, el) {
         if (state.over) return;
-        // Не preventDefault(), чтобы работал нативный скролл!
-
         if (cell.isOpen && cell.val === 0) return;
 
         state.touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -335,7 +379,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const y = e.touches[0].clientY;
         const dist = Math.hypot(x - state.touchStartPos.x, y - state.touchStartPos.y);
 
-        // Если сдвинули палец > 10px, считаем это скроллом -> отменяем игровые действия
         if (dist > 10) {
             clearTimeout(state.longPressTimer);
             state.longPressTimer = null;
@@ -348,13 +391,10 @@ document.addEventListener('DOMContentLoaded', () => {
         el.classList.remove('pressing');
 
         if (state.longPressTimer) {
-            // Если таймер не сработал (значит палец подняли быстро)
             clearTimeout(state.longPressTimer);
             state.longPressTimer = null;
 
-            // Если это не был свайп (touchStartPos не null)
             if (state.touchStartPos) {
-                // ВАЖНО: Предотвращаем дефолтный клик браузера, т.к. мы обработали тап
                 if (e.cancelable) e.preventDefault();
                 haptic('light');
                 handleClick(cell);
@@ -458,7 +498,9 @@ document.addEventListener('DOMContentLoaded', () => {
             UI.resultTitle.innerText = 'Победа!';
             haptic('success');
             let timeMs = Date.now() - state.startTime;
-            StorageManager.saveScore(state.mode, timeMs);
+            if (state.mode !== 'custom') {
+                StorageManager.saveScore(state.mode, timeMs);
+            }
         } else {
             UI.restartBtn.innerText = '😵';
             UI.resultEmoji.innerText = '💥';

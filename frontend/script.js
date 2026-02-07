@@ -26,7 +26,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 categories: ["Головоломки", "Классика"],
                 icon: "https://img.icons8.com/emoji/48/bomb-emoji.png",
                 url: "games/minesweeper/index.html",
-                storageKeys: ['minesweeper_records_v2']
+                storageKeys: [
+                    'minesweeper_best_beginner',
+                    'minesweeper_best_amateur',
+                    'minesweeper_best_expert'
+                ]
             },
             {
                 id: 3,
