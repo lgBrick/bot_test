@@ -16,11 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Вспомогательная функция форматирования времени (MM:SS.ms)
     function formatTime(ms) {
-        if (ms === null || ms === undefined) return '--:--';
+        if (ms === null || ms === undefined || isNaN(ms)) return '--:--';
         const totalSeconds = Math.floor(ms / 1000);
         const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
         const seconds = (totalSeconds % 60).toString().padStart(2, '0');
-        // Берем сотые доли секунды (первые 2 цифры от остатка)
         const centis = Math.floor((ms % 1000) / 10).toString().padStart(2, '0');
         return `${minutes}:${seconds}.${centis}`;
     }
@@ -46,10 +45,14 @@ document.addEventListener('DOMContentLoaded', () => {
         saveScore(mode, timeMs) {
             const key = this.getKey(mode);
             if (!key) return;
+
+            // 1. Сохраняем локально мгновенно
             let currentLocal = parseInt(localStorage.getItem(key)) || Infinity;
             if (timeMs < currentLocal) {
                 localStorage.setItem(key, timeMs);
             }
+
+            // 2. Отправляем в облако асинхронно
             if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
                 tg.CloudStorage.getItem(key, (err, val) => {
                     let cloudVal = val ? parseInt(val) : Infinity;
@@ -59,13 +62,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         },
+        // Функция синхронизации (как в 2048)
         syncScores(callback) {
             const modes = ['beginner', 'amateur', 'expert'];
             let processed = 0;
-            const finish = () => {
+
+            // Функция проверки завершения всех запросов
+            const checkDone = () => {
                 processed++;
-                // Вызываем колбек, когда обработали все режимы
-                if (processed === modes.length && callback) callback();
+                if (processed === modes.length && callback) {
+                    callback();
+                }
             };
 
             modes.forEach(mode => {
@@ -74,18 +81,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
                     tg.CloudStorage.getItem(key, (err, cloudStr) => {
-                        let cloudVal = cloudStr ? parseInt(cloudStr) : null;
+                        if (!err && cloudStr) {
+                            let cloudVal = parseInt(cloudStr);
 
-                        // Логика синхронизации: побеждает лучшее время (меньшее)
-                        if (cloudVal !== null && (localVal === null || cloudVal < localVal)) {
-                            localStorage.setItem(key, cloudVal);
-                        } else if (localVal !== null && (cloudVal === null || localVal < cloudVal)) {
+                            // Логика "побеждает лучший результат" (меньшее время)
+                            if (localVal === null || cloudVal < localVal) {
+                                // В облаке рекорд круче -> обновляем локалку
+                                localStorage.setItem(key, cloudVal);
+                            } else if (cloudVal > localVal) {
+                                // Локально рекорд круче -> пушим в облако
+                                tg.CloudStorage.setItem(key, localVal.toString());
+                            }
+                        } else if (localVal !== null) {
+                            // В облаке пусто, но есть локальный рекорд -> пушим
                             tg.CloudStorage.setItem(key, localVal.toString());
                         }
-                        finish();
+                        checkDone();
                     });
                 } else {
-                    finish();
+                    checkDone();
                 }
             });
         },
@@ -134,8 +148,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     function init() {
-        // 1. Сначала синхронизируем данные, и только потом обновляем UI меню
+        // === ИСПРАВЛЕНИЕ: Мгновенная отрисовка ===
+        // 1. Сразу рисуем то, что есть в LocalStorage (чтобы не было прочерков)
+        updateMenuScores();
+
+        // 2. Фоном запускаем синхронизацию с облаком
         StorageManager.syncScores(() => {
+            // 3. Когда облако ответит, обновляем меню еще раз (если там были более новые данные)
             updateMenuScores();
         });
 
@@ -235,6 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.game.classList.add('hidden');
         UI.overlay.classList.add('hidden');
         UI.menu.classList.remove('hidden');
+        // При возврате в меню снова обновляем рекорды
         updateMenuScores();
     }
 
@@ -299,7 +319,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (UI.game.classList.contains('hidden')) return;
             if (e.target.tagName === 'INPUT') return;
 
-            // Используем e.code для поддержки любых раскладок (KeyW, KeyA...)
             const code = e.code;
             const validCodes = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'];
 
@@ -505,7 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
             revealMinesWave();
         }
 
-        UI.resultTime.innerText = UI.timer.innerText; // Берем значение из таймера
+        UI.resultTime.innerText = UI.timer.innerText;
         setTimeout(() => UI.overlay.classList.remove('hidden'), 1200);
     }
 
@@ -568,10 +587,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return res;
     }
 
-    // === ТАЙМЕР ВЫСОКОЙ ТОЧНОСТИ ===
+    // === ТАЙМЕР ===
     function startTimer() {
         state.startTime = Date.now();
-        // Обновляем чаще (каждые 30мс), чтобы было видно сотые доли
         state.timerInt = setInterval(() => {
             const delta = Date.now() - state.startTime;
             UI.timer.innerText = formatTime(delta);
@@ -586,7 +604,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ['beginner', 'amateur', 'expert'].forEach(mode => {
             const el = document.getElementById(`score-${mode}`);
             const bestTime = StorageManager.getBestTime(mode);
-            // Используем ту же функцию форматирования
             el.innerText = formatTime(bestTime);
         });
     }
