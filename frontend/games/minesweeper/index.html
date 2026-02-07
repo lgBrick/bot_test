@@ -12,62 +12,69 @@
 
         <!-- ГЛАВНОЕ МЕНЮ -->
         <div id="menu-screen">
-            <div class="menu-header">
-                <h1>Сапер</h1>
-            </div>
-
-            <div class="presets-list">
-                <button class="preset-btn" data-mode="beginner">
-                    <div class="preset-info">
-                        <span class="mode-title">Новичок</span>
-                        <span class="mode-desc">9x9 • 10 мин</span>
-                    </div>
-                    <div class="preset-score">
-                        <span class="score-label">Лучшее:</span>
-                        <span class="score-val" id="score-beginner">--:--</span>
-                    </div>
-                </button>
-
-                <button class="preset-btn" data-mode="amateur">
-                    <div class="preset-info">
-                        <span class="mode-title">Любитель</span>
-                        <span class="mode-desc">16x16 • 40 мин</span>
-                    </div>
-                    <div class="preset-score">
-                        <span class="score-label">Лучшее:</span>
-                        <span class="score-val" id="score-amateur">--:--</span>
-                    </div>
-                </button>
-
-                <button class="preset-btn" data-mode="expert">
-                    <div class="preset-info">
-                        <span class="mode-title">Эксперт</span>
-                        <span class="mode-desc">30x16 • 99 мин</span>
-                    </div>
-                    <div class="preset-score">
-                        <span class="score-label">Лучшее:</span>
-                        <span class="score-val" id="score-expert">--:--</span>
-                    </div>
-                </button>
-            </div>
-
-            <div class="custom-section">
-                <h3>Своя игра</h3>
-                <div class="inputs-row">
-                    <div class="input-group">
-                        <label for="custom-cols">Ширина</label>
-                        <input type="number" id="custom-cols" placeholder="2-30" min="2" max="30" value="10">
-                    </div>
-                    <div class="input-group">
-                        <label for="custom-rows">Высота</label>
-                        <input type="number" id="custom-rows" placeholder="2-30" min="2" max="30" value="10">
-                    </div>
-                    <div class="input-group">
-                        <label for="custom-mines">Мины</label>
-                        <input type="number" id="custom-mines" placeholder="Min 1" min="1" max="899" value="15">
-                    </div>
+            <div class="menu-content">
+                <div class="menu-header">
+                    <h1>Сапер</h1>
                 </div>
-                <button id="start-custom-btn" class="action-btn">Играть</button>
+
+                <div class="presets-list">
+                    <button class="preset-btn" data-mode="beginner">
+                        <div class="preset-info">
+                            <span class="mode-title">Новичок</span>
+                            <span class="mode-desc">9x9 • 10 мин</span>
+                        </div>
+                        <div class="preset-score">
+                            <span class="score-label">Лучшее:</span>
+                            <span class="score-val" id="score-beginner">--:--</span>
+                        </div>
+                    </button>
+
+                    <button class="preset-btn" data-mode="amateur">
+                        <div class="preset-info">
+                            <span class="mode-title">Любитель</span>
+                            <span class="mode-desc">16x16 • 40 мин</span>
+                        </div>
+                        <div class="preset-score">
+                            <span class="score-label">Лучшее:</span>
+                            <span class="score-val" id="score-amateur">--:--</span>
+                        </div>
+                    </button>
+
+                    <button class="preset-btn" data-mode="expert">
+                        <div class="preset-info">
+                            <span class="mode-title">Эксперт</span>
+                            <span class="mode-desc">30x16 • 99 мин</span>
+                        </div>
+                        <div class="preset-score">
+                            <span class="score-label">Лучшее:</span>
+                            <span class="score-val" id="score-expert">--:--</span>
+                        </div>
+                    </button>
+                </div>
+
+                <div class="custom-section">
+                    <h3>Своя игра</h3>
+                    <div class="inputs-row">
+                        <div class="input-group">
+                            <label for="custom-cols">Ширина</label>
+                            <input type="number" id="custom-cols" placeholder="2-30" min="2" max="30" value="10">
+                        </div>
+                        <div class="input-group">
+                            <label for="custom-rows">Высота</label>
+                            <input type="number" id="custom-rows" placeholder="2-30" min="2" max="30" value="10">
+                        </div>
+                        <div class="input-group">
+                            <label for="custom-mines">Мины</label>
+                            <input type="number" id="custom-mines" placeholder="Min 1" min="1" max="899" value="15">
+                        </div>
+                    </div>
+                    <button id="start-custom-btn" class="action-btn">Играть</button>
+                </div>
+            </div>
+
+            <!-- Кнопка Помощь внизу -->
+            <div class="menu-footer">
+                <button id="help-btn" class="text-btn help-trigger">Помощь / Правила</button>
             </div>
         </div>
 
@@ -105,6 +112,40 @@
                 </div>
             </div>
         </div>
+
+        <!-- ЭКРАН ПОМОЩИ (НОВЫЙ) -->
+        <div id="help-overlay" class="overlay hidden">
+            <div class="overlay-content help-content">
+                <h2>Как играть</h2>
+
+                <div class="help-section">
+                    <p>🎯 <strong>Цель:</strong> Открыть все пустые клетки, не задев мину.</p>
+                    <p>🔢 <strong>Цифры:</strong> Показывают количество мин в соседних 8 клетках.</p>
+                </div>
+
+                <div class="help-divider"></div>
+
+                <div class="help-section">
+                    <h3>📱 Телефон</h3>
+                    <ul class="control-list">
+                        <li><strong>Тап:</strong> Открыть клетку</li>
+                        <li><strong>Долгое нажатие:</strong> Поставить флаг 🚩</li>
+                    </ul>
+                </div>
+
+                <div class="help-section">
+                    <h3>💻 Компьютер</h3>
+                    <ul class="control-list">
+                        <li><strong>ЛКМ:</strong> Открыть клетку</li>
+                        <li><strong>ПКМ:</strong> Поставить флаг 🚩</li>
+                        <li><strong>WASD / Стрелки:</strong> Прокрутка поля</li>
+                    </ul>
+                </div>
+
+                <button id="help-close-btn" class="action-btn">Понятно</button>
+            </div>
+        </div>
+
     </div>
 
     <script src="script.js"></script>

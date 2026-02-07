@@ -2,23 +2,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // === СИСТЕМА ЛОГОВ (Для отладки) ===
     function log(msg) {
         console.log('[Minesweeper Cloud]', msg);
-        // Если нужно видеть логи на экране телефона, раскомментируй:
-        // let dbg = document.getElementById('debug-log');
-        // if (!dbg) {
-        //     dbg = document.createElement('div');
-        //     dbg.id = 'debug-log';
-        //     dbg.style.cssText = "position:absolute;top:0;left:0;width:100%;background:rgba(0,0,0,0.8);color:#fff;font-size:10px;z-index:9999;pointer-events:none;";
-        //     document.body.appendChild(dbg);
-        // }
-        // dbg.innerText = msg + '\n' + dbg.innerText.substring(0, 100);
     }
 
-    // === ИНИЦИАЛИЗАЦИЯ TELEGRAM SDK (КАК В 2048) ===
+    // === ИНИЦИАЛИЗАЦИЯ TELEGRAM SDK ===
     let tg = window.Telegram.WebApp;
     let cloudStorage = null;
 
     try {
-        // Пытаемся взять SDK из родителя (важно для iframe)
         if (window.parent && window.parent.Telegram && window.parent.Telegram.WebApp) {
             tg = window.parent.Telegram.WebApp;
             log('TG SDK: Loaded from Parent');
@@ -31,7 +21,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (tg.expand) tg.expand();
             if (tg.enableClosingConfirmation) tg.enableClosingConfirmation();
 
-            // Проверяем CloudStorage
             if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
                 cloudStorage = tg.CloudStorage;
                 log('CloudStorage: Available');
@@ -71,7 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
         expert: { rows: 16, cols: 30, mines: 99 }
     };
 
-    // Ключи должны быть уникальными для приложения
     const KEYS = {
         BEGINNER: 'mines_best_beginner_v1',
         AMATEUR: 'mines_best_amateur_v1',
@@ -86,7 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return null;
         },
 
-        // Получить лучшее время (только локально для быстрого отображения)
         getLocalBest(mode) {
             const key = this.getKey(mode);
             if (!key) return null;
@@ -94,46 +81,34 @@ document.addEventListener('DOMContentLoaded', () => {
             return isNaN(val) ? null : val;
         },
 
-        // Сохранение рекорда
         saveScore(mode, timeMs) {
             const key = this.getKey(mode);
             if (!key) return;
 
             log(`Attempt save ${mode}: ${timeMs}`);
 
-            // 1. Локальная проверка и сохранение
             let localBest = this.getLocalBest(mode);
-            // Если рекорда нет ИЛИ новый результат меньше (лучше) старого
             if (localBest === null || timeMs < localBest) {
                 localStorage.setItem(key, timeMs);
                 log(`Local saved new best: ${timeMs}`);
-                localBest = timeMs; // Обновляем для сравнения с облаком
-                updateMenuScores(); // Обновляем UI сразу
+                localBest = timeMs;
+                updateMenuScores();
             }
 
-            // 2. Облачное сохранение
             if (cloudStorage) {
                 cloudStorage.getItem(key, (err, val) => {
-                    if (err) {
-                        log('Cloud Get Error: ' + err);
-                        return;
-                    }
+                    if (err) return;
 
                     const cloudBest = val ? parseInt(val) : null;
-
-                    // Если в облаке пусто ИЛИ новый результат лучше облачного
                     if (cloudBest === null || timeMs < cloudBest) {
                         cloudStorage.setItem(key, timeMs.toString(), (err) => {
                             if (!err) log(`Cloud saved new best: ${timeMs}`);
                         });
-                    } else {
-                        log(`Cloud not saved: existing ${cloudBest} is better than ${timeMs}`);
                     }
                 });
             }
         },
 
-        // Синхронизация при запуске
         syncScores(callback) {
             const modes = ['beginner', 'amateur', 'expert'];
             let processed = 0;
@@ -153,33 +128,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     cloudStorage.getItem(key, (err, cloudStr) => {
                         if (!err && cloudStr) {
                             let cloudVal = parseInt(cloudStr);
-
                             log(`Sync ${mode}: Local=${localVal}, Cloud=${cloudVal}`);
 
                             if (!isNaN(cloudVal)) {
-                                // ЛОГИКА "МЕНЬШЕ - ЛУЧШЕ" (Время)
-
-                                // Случай 1: В облаке есть, локально нет -> берем из облака
                                 if (localVal === null) {
                                     localStorage.setItem(key, cloudVal);
-                                    log(`Restored ${mode} from Cloud`);
-                                }
-                                // Случай 2: Облако лучше (меньше) чем локально -> обновляем локалку
-                                else if (cloudVal < localVal) {
+                                } else if (cloudVal < localVal) {
                                     localStorage.setItem(key, cloudVal);
-                                    log(`Updated ${mode} local from Cloud (Cloud was faster)`);
-                                }
-                                // Случай 3: Локально лучше (меньше) чем облако -> пушим в облако
-                                else if (localVal < cloudVal) {
+                                } else if (localVal < cloudVal) {
                                     cloudStorage.setItem(key, localVal.toString());
-                                    log(`Pushed ${mode} to Cloud (Local was faster)`);
                                 }
                             }
                         } else {
-                            // В облаке пусто. Если локально что-то есть -> сохраняем в облако
                             if (localVal !== null) {
                                 cloudStorage.setItem(key, localVal.toString());
-                                log(`Init Cloud for ${mode}`);
                             }
                         }
                         checkDone();
@@ -210,7 +172,11 @@ document.addEventListener('DOMContentLoaded', () => {
             c: document.getElementById('custom-cols'),
             r: document.getElementById('custom-rows'),
             m: document.getElementById('custom-mines')
-        }
+        },
+        // Элементы помощи
+        helpBtn: document.getElementById('help-btn'),
+        helpOverlay: document.getElementById('help-overlay'),
+        helpClose: document.getElementById('help-close-btn')
     };
 
     let state = {
@@ -229,12 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     function init() {
-        // 1. Рисуем то, что есть локально
         updateMenuScores();
-
-        // 2. Синхронизируем с облаком
         StorageManager.syncScores(() => {
-            // 3. Обновляем UI после синхронизации
             updateMenuScores();
         });
 
@@ -256,23 +218,27 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.backBtn.onclick = () => { haptic('light'); showMenu(); };
         UI.overlayMenu.onclick = () => { haptic('light'); showMenu(); };
 
+        // === ЛОГИКА ПОМОЩИ ===
+        UI.helpBtn.onclick = () => {
+            UI.helpOverlay.classList.remove('hidden');
+            haptic('light');
+        };
+        UI.helpClose.onclick = () => {
+            UI.helpOverlay.classList.add('hidden');
+            haptic('light');
+        };
+
         setupKeyboardScroll();
     }
 
     // === CUSTOM GAME LOGIC ===
-
     function setupCustomInputs() {
         const { c, r } = UI.inputs;
-
-        const enforceMax = (e) => {
-            if (e.target.value > 30) e.target.value = 30;
-        };
-
+        const enforceMax = (e) => { if (e.target.value > 30) e.target.value = 30; };
         const enforceMin = (e) => {
             let val = parseInt(e.target.value);
             if (isNaN(val) || val < 2) e.target.value = 2;
         };
-
         [c, r].forEach(input => {
             input.addEventListener('input', enforceMax);
             input.addEventListener('change', enforceMin);
@@ -289,10 +255,9 @@ document.addEventListener('DOMContentLoaded', () => {
             tg.showAlert("Размер поля должен быть от 2 до 30!");
             return;
         }
-
         const maxMines = (rows * cols) - 1;
         if (mines < 1 || mines > maxMines) {
-            tg.showAlert(`Количество мин должно быть от 1 до ${maxMines} (чтобы осталась хотя бы одна пустая клетка).`);
+            tg.showAlert(`Количество мин должно быть от 1 до ${maxMines}`);
             return;
         }
 
@@ -301,13 +266,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // === ЛОГИКА ИГРЫ ===
-
     function startGame(mode, config) {
         state.mode = mode;
         state.config = config;
         UI.menu.classList.add('hidden');
         UI.game.classList.remove('hidden');
         UI.overlay.classList.add('hidden');
+        UI.helpOverlay.classList.add('hidden'); // На всякий случай скрываем помощь
         resetGame();
     }
 
@@ -375,7 +340,6 @@ document.addEventListener('DOMContentLoaded', () => {
         while(placed < mines) {
             let r = Math.floor(Math.random() * rows);
             let c = Math.floor(Math.random() * cols);
-
             if (!grid[r][c].isMine) {
                 grid[r][c].isMine = true;
                 placed++;
@@ -391,7 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
     }
 
-    // === УПРАВЛЕНИЕ WASD ===
+    // === УПРАВЛЕНИЕ ===
     function setupKeyboardScroll() {
         document.addEventListener('keydown', (e) => {
             if (UI.game.classList.contains('hidden')) return;
@@ -417,29 +381,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function scrollLoop() {
         const speed = 15;
         const wrapper = UI.scrollWrapper;
-
-        if (state.keysPressed['KeyW'] || state.keysPressed['ArrowUp']) {
-            wrapper.scrollTop -= speed;
-        }
-        if (state.keysPressed['KeyS'] || state.keysPressed['ArrowDown']) {
-            wrapper.scrollTop += speed;
-        }
-        if (state.keysPressed['KeyA'] || state.keysPressed['ArrowLeft']) {
-            wrapper.scrollLeft -= speed;
-        }
-        if (state.keysPressed['KeyD'] || state.keysPressed['ArrowRight']) {
-            wrapper.scrollLeft += speed;
-        }
+        if (state.keysPressed['KeyW'] || state.keysPressed['ArrowUp']) wrapper.scrollTop -= speed;
+        if (state.keysPressed['KeyS'] || state.keysPressed['ArrowDown']) wrapper.scrollTop += speed;
+        if (state.keysPressed['KeyA'] || state.keysPressed['ArrowLeft']) wrapper.scrollLeft -= speed;
+        if (state.keysPressed['KeyD'] || state.keysPressed['ArrowRight']) wrapper.scrollLeft += speed;
 
         const anyPressed = Object.values(state.keysPressed).some(v => v);
-        if (anyPressed) {
-            requestAnimationFrame(scrollLoop);
-        } else {
-            state.isScrollingLoop = false;
-        }
+        if (anyPressed) requestAnimationFrame(scrollLoop);
+        else state.isScrollingLoop = false;
     }
 
-    // === MOUSE/TOUCH ===
     function handleMouse(e, cell) {
         if (state.over) return;
         if (e.button === 0) handleClick(cell);
@@ -463,10 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleTouchMove(e, el) {
         if (!state.touchStartPos) return;
-        const x = e.touches[0].clientX;
-        const y = e.touches[0].clientY;
-        const dist = Math.hypot(x - state.touchStartPos.x, y - state.touchStartPos.y);
-
+        const dist = Math.hypot(e.touches[0].clientX - state.touchStartPos.x, e.touches[0].clientY - state.touchStartPos.y);
         if (dist > 10) {
             clearTimeout(state.longPressTimer);
             state.longPressTimer = null;
@@ -477,11 +425,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleTouchEnd(e, cell, el) {
         el.classList.remove('pressing');
-
         if (state.longPressTimer) {
             clearTimeout(state.longPressTimer);
             state.longPressTimer = null;
-
             if (state.touchStartPos) {
                 if (e.cancelable) e.preventDefault();
                 haptic('light');
@@ -491,33 +437,20 @@ document.addEventListener('DOMContentLoaded', () => {
         state.touchStartPos = null;
     }
 
-    // === ACTIONS ===
     function handleClick(cell) {
         if (state.over || state.won || cell.isFlagged) return;
-
-        if (!state.started) {
-            state.started = true;
-            startTimer();
-        }
-
+        if (!state.started) { state.started = true; startTimer(); }
         const activeCell = state.grid[cell.r][cell.c];
-        if (activeCell.isOpen) {
-            tryChord(activeCell);
-            return;
-        }
+        if (activeCell.isOpen) { tryChord(activeCell); return; }
         openCell(activeCell);
     }
 
     function toggleFlag(cell) {
-        if (!state.started && !state.over) {
-            state.started = true; startTimer();
-        }
+        if (!state.started && !state.over) { state.started = true; startTimer(); }
         if (state.over || cell.isOpen) return;
-
         const activeCell = state.grid[cell.r][cell.c];
         activeCell.isFlagged = !activeCell.isFlagged;
         state.flags += activeCell.isFlagged ? 1 : -1;
-
         updateVisual(activeCell);
         updateHeader();
         haptic('selection');
@@ -527,14 +460,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cell.val === 0) return;
         const neighbors = getNeighbors(state.grid, cell.r, cell.c);
         const flags = neighbors.filter(n => n.isFlagged).length;
-
         if (flags === cell.val) {
             let triggered = false;
             neighbors.forEach(n => {
-                if (!n.isOpen && !n.isFlagged) {
-                    openCell(n);
-                    triggered = true;
-                }
+                if (!n.isOpen && !n.isFlagged) { openCell(n); triggered = true; }
             });
             if(triggered) haptic('medium');
         } else {
@@ -550,19 +479,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openCell(cell) {
         if (cell.isOpen || cell.isFlagged) return;
-
         cell.isOpen = true;
         updateVisual(cell);
-
-        if (cell.isMine) {
-            gameOver(false);
-            return;
-        }
-
-        if (cell.val === 0) {
-            getNeighbors(state.grid, cell.r, cell.c).forEach(n => openCell(n));
-        }
-
+        if (cell.isMine) { gameOver(false); return; }
+        if (cell.val === 0) getNeighbors(state.grid, cell.r, cell.c).forEach(n => openCell(n));
         checkWin();
     }
 
@@ -570,27 +490,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const { rows, cols, mines } = state.config;
         let opened = 0;
         state.grid.forEach(r => r.forEach(c => { if(c.isOpen) opened++; }));
-        if (opened === (rows * cols - mines)) {
-            gameOver(true);
-        }
+        if (opened === (rows * cols - mines)) gameOver(true);
     }
 
     function gameOver(win) {
         state.over = true;
         state.won = win;
         stopTimer();
-
         if (win) {
             UI.restartBtn.innerText = '😎';
             UI.resultEmoji.innerText = '😎';
             UI.resultTitle.innerText = 'Победа!';
             haptic('success');
-
-            // Сохраняем результат
             let timeMs = Date.now() - state.startTime;
-            if (state.mode !== 'custom') {
-                StorageManager.saveScore(state.mode, timeMs);
-            }
+            if (state.mode !== 'custom') StorageManager.saveScore(state.mode, timeMs);
         } else {
             UI.restartBtn.innerText = '😵';
             UI.resultEmoji.innerText = '💥';
@@ -598,7 +511,6 @@ document.addEventListener('DOMContentLoaded', () => {
             haptic('error');
             revealMinesWave();
         }
-
         UI.resultTime.innerText = UI.timer.innerText;
         setTimeout(() => UI.overlay.classList.remove('hidden'), 1200);
     }
@@ -614,12 +526,8 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 const el = document.getElementById(`c-${item.c.r}-${item.c.c}`);
                 if (!el) return;
-                if (item.type === 'mine') {
-                    el.classList.add('mine', 'revealed-mine');
-                    el.innerText = '💣';
-                } else {
-                    el.classList.add('wrong-flag');
-                }
+                if (item.type === 'mine') { el.classList.add('mine', 'revealed-mine'); el.innerText = '💣'; }
+                else { el.classList.add('wrong-flag'); }
             }, index * 15);
         });
     }
@@ -631,22 +539,12 @@ document.addEventListener('DOMContentLoaded', () => {
         el.innerText = '';
         if (cell.isOpen) {
             el.classList.add('open');
-            if (cell.isMine) {
-                el.classList.add('mine');
-                el.innerText = '💣';
-            } else if (cell.val > 0) {
-                el.innerText = cell.val;
-                el.classList.add(`val-${cell.val}`);
-            }
-        } else if (cell.isFlagged) {
-            el.classList.add('flagged');
-            el.innerText = '🚩';
-        }
+            if (cell.isMine) { el.classList.add('mine'); el.innerText = '💣'; }
+            else if (cell.val > 0) { el.innerText = cell.val; el.classList.add(`val-${cell.val}`); }
+        } else if (cell.isFlagged) { el.classList.add('flagged'); el.innerText = '🚩'; }
     }
 
-    function updateHeader() {
-        UI.minesCount.innerText = Math.max(0, state.config.mines - state.flags);
-    }
+    function updateHeader() { UI.minesCount.innerText = Math.max(0, state.config.mines - state.flags); }
 
     function getNeighbors(grid, r, c) {
         let res = [];
@@ -654,26 +552,17 @@ document.addEventListener('DOMContentLoaded', () => {
             for(let dc=-1; dc<=1; dc++) {
                 if(dr==0 && dc==0) continue;
                 let nr = r+dr, nc = c+dc;
-                if(nr>=0 && nr<grid.length && nc>=0 && nc<grid[0].length) {
-                    res.push(grid[nr][nc]);
-                }
+                if(nr>=0 && nr<grid.length && nc>=0 && nc<grid[0].length) res.push(grid[nr][nc]);
             }
         }
         return res;
     }
 
-    // === ТАЙМЕР ===
     function startTimer() {
         state.startTime = Date.now();
-        state.timerInt = setInterval(() => {
-            const delta = Date.now() - state.startTime;
-            UI.timer.innerText = formatTime(delta);
-        }, 30);
+        state.timerInt = setInterval(() => { UI.timer.innerText = formatTime(Date.now() - state.startTime); }, 30);
     }
-
-    function stopTimer() {
-        clearInterval(state.timerInt);
-    }
+    function stopTimer() { clearInterval(state.timerInt); }
 
     function updateMenuScores() {
         ['beginner', 'amateur', 'expert'].forEach(mode => {
