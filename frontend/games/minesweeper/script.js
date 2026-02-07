@@ -14,6 +14,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (type === 'selection') tg.HapticFeedback.selectionChanged();
     }
 
+    // Вспомогательная функция форматирования времени (MM:SS.ms)
+    function formatTime(ms) {
+        if (ms === null || ms === undefined) return '--:--';
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+        const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+        // Берем сотые доли секунды (первые 2 цифры от остатка)
+        const centis = Math.floor((ms % 1000) / 10).toString().padStart(2, '0');
+        return `${minutes}:${seconds}.${centis}`;
+    }
+
     const PRESETS = {
         beginner: { rows: 9, cols: 9, mines: 10 },
         amateur: { rows: 16, cols: 16, mines: 40 },
@@ -119,15 +130,14 @@ document.addEventListener('DOMContentLoaded', () => {
         flags: 0,
         longPressTimer: null,
         touchStartPos: null,
-        // Для управления клавиатурой
         keysPressed: {}
     };
 
     function init() {
-        // Сразу обновляем из локалстораджа, чтобы не было пустоты
-        updateMenuScores();
-        // Затем синхронизируем с облаком и обновляем еще раз
-        StorageManager.syncScores(() => { updateMenuScores(); });
+        // 1. Сначала синхронизируем данные, и только потом обновляем UI меню
+        StorageManager.syncScores(() => {
+            updateMenuScores();
+        });
 
         document.querySelectorAll('.preset-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -155,12 +165,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function setupCustomInputs() {
         const { c, r } = UI.inputs;
 
-        // Авто-коррекция при вводе: не даем ввести больше 30
         const enforceMax = (e) => {
             if (e.target.value > 30) e.target.value = 30;
         };
 
-        // Коррекция при потере фокуса: не даем ввести меньше 2
         const enforceMin = (e) => {
             let val = parseInt(e.target.value);
             if (isNaN(val) || val < 2) e.target.value = 2;
@@ -178,7 +186,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let rows = parseInt(UI.inputs.r.value);
         let mines = parseInt(UI.inputs.m.value);
 
-        // Финальная валидация "защита от дурака"
         if (cols < 2 || cols > 30 || rows < 2 || rows > 30) {
             tg.showAlert("Размер поля должен быть от 2 до 30!");
             return;
@@ -211,10 +218,9 @@ document.addEventListener('DOMContentLoaded', () => {
         state.over = false;
         state.won = false;
         state.flags = 0;
-        UI.timer.innerText = '00:00';
+        UI.timer.innerText = '00:00.00';
         UI.restartBtn.innerText = '🙂';
 
-        // Генерируем поле
         generateBoard();
         updateHeader();
     }
@@ -248,11 +254,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 el.className = 'cell';
                 el.id = `c-${r}-${c}`;
 
-                // Mouse events
                 el.addEventListener('mousedown', (e) => handleMouse(e, cell));
                 el.addEventListener('contextmenu', (e) => { e.preventDefault(); });
 
-                // Touch events
                 el.addEventListener('touchstart', (e) => handleTouchStart(e, cell, el), {passive: false});
                 el.addEventListener('touchmove', (e) => handleTouchMove(e, el), {passive: false});
                 el.addEventListener('touchend', (e) => handleTouchEnd(e, cell, el), {passive: false});
@@ -291,19 +295,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // === УПРАВЛЕНИЕ WASD (DESKTOP) ===
 
     function setupKeyboardScroll() {
-        // Слушаем нажатия клавиш
         document.addEventListener('keydown', (e) => {
-            // Если игра скрыта, не скроллим
             if (UI.game.classList.contains('hidden')) return;
-
-            // Если фокус в инпутах, не перехватываем
             if (e.target.tagName === 'INPUT') return;
 
-            const key = e.key.toLowerCase();
-            const validKeys = ['w', 'a', 's', 'd', 'arrowup', 'arrowleft', 'arrowdown', 'arrowright'];
+            // Используем e.code для поддержки любых раскладок (KeyW, KeyA...)
+            const code = e.code;
+            const validCodes = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'];
 
-            if (validKeys.includes(key)) {
-                state.keysPressed[key] = true;
+            if (validCodes.includes(code)) {
+                state.keysPressed[code] = true;
                 if (!state.isScrollingLoop) {
                     state.isScrollingLoop = true;
                     requestAnimationFrame(scrollLoop);
@@ -312,34 +313,27 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         document.addEventListener('keyup', (e) => {
-            const key = e.key.toLowerCase();
-            state.keysPressed[key] = false;
+            state.keysPressed[e.code] = false;
         });
     }
 
     function scrollLoop() {
-        const speed = 15; // Скорость скролла
+        const speed = 15;
         const wrapper = UI.scrollWrapper;
-        let move = false;
 
-        if (state.keysPressed['w'] || state.keysPressed['arrowup']) {
+        if (state.keysPressed['KeyW'] || state.keysPressed['ArrowUp']) {
             wrapper.scrollTop -= speed;
-            move = true;
         }
-        if (state.keysPressed['s'] || state.keysPressed['arrowdown']) {
+        if (state.keysPressed['KeyS'] || state.keysPressed['ArrowDown']) {
             wrapper.scrollTop += speed;
-            move = true;
         }
-        if (state.keysPressed['a'] || state.keysPressed['arrowleft']) {
+        if (state.keysPressed['KeyA'] || state.keysPressed['ArrowLeft']) {
             wrapper.scrollLeft -= speed;
-            move = true;
         }
-        if (state.keysPressed['d'] || state.keysPressed['arrowright']) {
+        if (state.keysPressed['KeyD'] || state.keysPressed['ArrowRight']) {
             wrapper.scrollLeft += speed;
-            move = true;
         }
 
-        // Проверяем, нажата ли хоть одна клавиша, чтобы продолжить цикл
         const anyPressed = Object.values(state.keysPressed).some(v => v);
         if (anyPressed) {
             requestAnimationFrame(scrollLoop);
@@ -497,6 +491,8 @@ document.addEventListener('DOMContentLoaded', () => {
             UI.resultEmoji.innerText = '😎';
             UI.resultTitle.innerText = 'Победа!';
             haptic('success');
+
+            // Сохраняем точное время в миллисекундах
             let timeMs = Date.now() - state.startTime;
             if (state.mode !== 'custom') {
                 StorageManager.saveScore(state.mode, timeMs);
@@ -508,7 +504,8 @@ document.addEventListener('DOMContentLoaded', () => {
             haptic('error');
             revealMinesWave();
         }
-        UI.resultTime.innerText = UI.timer.innerText;
+
+        UI.resultTime.innerText = UI.timer.innerText; // Берем значение из таймера
         setTimeout(() => UI.overlay.classList.remove('hidden'), 1200);
     }
 
@@ -571,14 +568,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return res;
     }
 
+    // === ТАЙМЕР ВЫСОКОЙ ТОЧНОСТИ ===
     function startTimer() {
         state.startTime = Date.now();
+        // Обновляем чаще (каждые 30мс), чтобы было видно сотые доли
         state.timerInt = setInterval(() => {
-            let delta = Math.floor((Date.now() - state.startTime)/1000);
-            let m = Math.floor(delta/60).toString().padStart(2,'0');
-            let s = (delta%60).toString().padStart(2,'0');
-            UI.timer.innerText = `${m}:${s}`;
-        }, 1000);
+            const delta = Date.now() - state.startTime;
+            UI.timer.innerText = formatTime(delta);
+        }, 30);
     }
 
     function stopTimer() {
@@ -589,12 +586,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ['beginner', 'amateur', 'expert'].forEach(mode => {
             const el = document.getElementById(`score-${mode}`);
             const bestTime = StorageManager.getBestTime(mode);
-            if (bestTime) {
-                let d = Math.floor(bestTime/1000);
-                el.innerText = `${Math.floor(d/60).toString().padStart(2,'0')}:${(d%60).toString().padStart(2,'0')}`;
-            } else {
-                el.innerText = '--:--';
-            }
+            // Используем ту же функцию форматирования
+            el.innerText = formatTime(bestTime);
         });
     }
 
