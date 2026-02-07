@@ -24,7 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 id: 2,
                 title: "Minesweeper",
                 categories: ["Головоломки", "Классика"],
-                icon: "https://img.icons8.com/emoji/48/bomb-emoji.png",
+                icon: "https://cdn-icons-png.flaticon.com/128/1475/1475323.png",
                 url: "games/minesweeper/index.html",
                 storageKeys: [
                     'minesweeper_best_beginner',
@@ -34,7 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
             },
             {
                 id: 3,
-                title: "2048 (моя игра)",
+                title: "2048",
                 categories: ["Новые", "Головоломки"],
                 icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
                 url: "games/2048v2/index.html",
