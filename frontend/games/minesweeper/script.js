@@ -1,22 +1,63 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    if (tg.expand) tg.expand();
-    if (tg.enableClosingConfirmation) tg.enableClosingConfirmation();
+    // === СИСТЕМА ЛОГОВ (Для отладки) ===
+    function log(msg) {
+        console.log('[Minesweeper Cloud]', msg);
+        // Если нужно видеть логи на экране телефона, раскомментируй:
+        // let dbg = document.getElementById('debug-log');
+        // if (!dbg) {
+        //     dbg = document.createElement('div');
+        //     dbg.id = 'debug-log';
+        //     dbg.style.cssText = "position:absolute;top:0;left:0;width:100%;background:rgba(0,0,0,0.8);color:#fff;font-size:10px;z-index:9999;pointer-events:none;";
+        //     document.body.appendChild(dbg);
+        // }
+        // dbg.innerText = msg + '\n' + dbg.innerText.substring(0, 100);
+    }
+
+    // === ИНИЦИАЛИЗАЦИЯ TELEGRAM SDK (КАК В 2048) ===
+    let tg = window.Telegram.WebApp;
+    let cloudStorage = null;
+
+    try {
+        // Пытаемся взять SDK из родителя (важно для iframe)
+        if (window.parent && window.parent.Telegram && window.parent.Telegram.WebApp) {
+            tg = window.parent.Telegram.WebApp;
+            log('TG SDK: Loaded from Parent');
+        } else {
+            log('TG SDK: Loaded from Local');
+        }
+
+        if (tg) {
+            tg.ready();
+            if (tg.expand) tg.expand();
+            if (tg.enableClosingConfirmation) tg.enableClosingConfirmation();
+
+            // Проверяем CloudStorage
+            if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
+                cloudStorage = tg.CloudStorage;
+                log('CloudStorage: Available');
+            } else {
+                log('CloudStorage: Not supported');
+            }
+        }
+    } catch (e) {
+        log('Init Error: ' + e.message);
+    }
 
     function haptic(type) {
         if (!tg.HapticFeedback) return;
-        if (type === 'light') tg.HapticFeedback.impactOccurred('light');
-        if (type === 'medium') tg.HapticFeedback.impactOccurred('medium');
-        if (type === 'heavy') tg.HapticFeedback.impactOccurred('heavy');
-        if (type === 'success') tg.HapticFeedback.notificationOccurred('success');
-        if (type === 'error') tg.HapticFeedback.notificationOccurred('error');
-        if (type === 'selection') tg.HapticFeedback.selectionChanged();
+        try {
+            if (type === 'light') tg.HapticFeedback.impactOccurred('light');
+            if (type === 'medium') tg.HapticFeedback.impactOccurred('medium');
+            if (type === 'heavy') tg.HapticFeedback.impactOccurred('heavy');
+            if (type === 'success') tg.HapticFeedback.notificationOccurred('success');
+            if (type === 'error') tg.HapticFeedback.notificationOccurred('error');
+            if (type === 'selection') tg.HapticFeedback.selectionChanged();
+        } catch(e) {}
     }
 
     // Вспомогательная функция форматирования времени (MM:SS.ms)
     function formatTime(ms) {
-        if (ms === null || ms === undefined || isNaN(ms)) return '--:--';
+        if (ms === null || ms === undefined || isNaN(ms) || ms === Infinity) return '--:--';
         const totalSeconds = Math.floor(ms / 1000);
         const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
         const seconds = (totalSeconds % 60).toString().padStart(2, '0');
@@ -29,10 +70,12 @@ document.addEventListener('DOMContentLoaded', () => {
         amateur: { rows: 16, cols: 16, mines: 40 },
         expert: { rows: 16, cols: 30, mines: 99 }
     };
+
+    // Ключи должны быть уникальными для приложения
     const KEYS = {
-        BEGINNER: 'minesweeper_best_beginner',
-        AMATEUR: 'minesweeper_best_amateur',
-        EXPERT: 'minesweeper_best_expert'
+        BEGINNER: 'mines_best_beginner_v1',
+        AMATEUR: 'mines_best_amateur_v1',
+        EXPERT: 'mines_best_expert_v1'
     };
 
     const StorageManager = {
@@ -42,32 +85,59 @@ document.addEventListener('DOMContentLoaded', () => {
             if (mode === 'expert') return KEYS.EXPERT;
             return null;
         },
+
+        // Получить лучшее время (только локально для быстрого отображения)
+        getLocalBest(mode) {
+            const key = this.getKey(mode);
+            if (!key) return null;
+            const val = parseInt(localStorage.getItem(key));
+            return isNaN(val) ? null : val;
+        },
+
+        // Сохранение рекорда
         saveScore(mode, timeMs) {
             const key = this.getKey(mode);
             if (!key) return;
 
-            // 1. Сохраняем локально мгновенно
-            let currentLocal = parseInt(localStorage.getItem(key)) || Infinity;
-            if (timeMs < currentLocal) {
+            log(`Attempt save ${mode}: ${timeMs}`);
+
+            // 1. Локальная проверка и сохранение
+            let localBest = this.getLocalBest(mode);
+            // Если рекорда нет ИЛИ новый результат меньше (лучше) старого
+            if (localBest === null || timeMs < localBest) {
                 localStorage.setItem(key, timeMs);
+                log(`Local saved new best: ${timeMs}`);
+                localBest = timeMs; // Обновляем для сравнения с облаком
+                updateMenuScores(); // Обновляем UI сразу
             }
 
-            // 2. Отправляем в облако асинхронно
-            if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
-                tg.CloudStorage.getItem(key, (err, val) => {
-                    let cloudVal = val ? parseInt(val) : Infinity;
-                    if (timeMs < cloudVal) {
-                        tg.CloudStorage.setItem(key, timeMs.toString());
+            // 2. Облачное сохранение
+            if (cloudStorage) {
+                cloudStorage.getItem(key, (err, val) => {
+                    if (err) {
+                        log('Cloud Get Error: ' + err);
+                        return;
+                    }
+
+                    const cloudBest = val ? parseInt(val) : null;
+
+                    // Если в облаке пусто ИЛИ новый результат лучше облачного
+                    if (cloudBest === null || timeMs < cloudBest) {
+                        cloudStorage.setItem(key, timeMs.toString(), (err) => {
+                            if (!err) log(`Cloud saved new best: ${timeMs}`);
+                        });
+                    } else {
+                        log(`Cloud not saved: existing ${cloudBest} is better than ${timeMs}`);
                     }
                 });
             }
         },
-        // Функция синхронизации (как в 2048)
+
+        // Синхронизация при запуске
         syncScores(callback) {
             const modes = ['beginner', 'amateur', 'expert'];
             let processed = 0;
 
-            // Функция проверки завершения всех запросов
             const checkDone = () => {
                 processed++;
                 if (processed === modes.length && callback) {
@@ -77,24 +147,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
             modes.forEach(mode => {
                 const key = this.getKey(mode);
-                let localVal = parseInt(localStorage.getItem(key)) || null;
+                let localVal = this.getLocalBest(mode);
 
-                if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
-                    tg.CloudStorage.getItem(key, (err, cloudStr) => {
+                if (cloudStorage) {
+                    cloudStorage.getItem(key, (err, cloudStr) => {
                         if (!err && cloudStr) {
                             let cloudVal = parseInt(cloudStr);
 
-                            // Логика "побеждает лучший результат" (меньшее время)
-                            if (localVal === null || cloudVal < localVal) {
-                                // В облаке рекорд круче -> обновляем локалку
-                                localStorage.setItem(key, cloudVal);
-                            } else if (cloudVal > localVal) {
-                                // Локально рекорд круче -> пушим в облако
-                                tg.CloudStorage.setItem(key, localVal.toString());
+                            log(`Sync ${mode}: Local=${localVal}, Cloud=${cloudVal}`);
+
+                            if (!isNaN(cloudVal)) {
+                                // ЛОГИКА "МЕНЬШЕ - ЛУЧШЕ" (Время)
+
+                                // Случай 1: В облаке есть, локально нет -> берем из облака
+                                if (localVal === null) {
+                                    localStorage.setItem(key, cloudVal);
+                                    log(`Restored ${mode} from Cloud`);
+                                }
+                                // Случай 2: Облако лучше (меньше) чем локально -> обновляем локалку
+                                else if (cloudVal < localVal) {
+                                    localStorage.setItem(key, cloudVal);
+                                    log(`Updated ${mode} local from Cloud (Cloud was faster)`);
+                                }
+                                // Случай 3: Локально лучше (меньше) чем облако -> пушим в облако
+                                else if (localVal < cloudVal) {
+                                    cloudStorage.setItem(key, localVal.toString());
+                                    log(`Pushed ${mode} to Cloud (Local was faster)`);
+                                }
                             }
-                        } else if (localVal !== null) {
-                            // В облаке пусто, но есть локальный рекорд -> пушим
-                            tg.CloudStorage.setItem(key, localVal.toString());
+                        } else {
+                            // В облаке пусто. Если локально что-то есть -> сохраняем в облако
+                            if (localVal !== null) {
+                                cloudStorage.setItem(key, localVal.toString());
+                                log(`Init Cloud for ${mode}`);
+                            }
                         }
                         checkDone();
                     });
@@ -102,11 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     checkDone();
                 }
             });
-        },
-        getBestTime(mode) {
-            const key = this.getKey(mode);
-            if (!key) return null;
-            return parseInt(localStorage.getItem(key)) || null;
         }
     };
 
@@ -148,13 +229,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     function init() {
-        // === ИСПРАВЛЕНИЕ: Мгновенная отрисовка ===
-        // 1. Сразу рисуем то, что есть в LocalStorage (чтобы не было прочерков)
+        // 1. Рисуем то, что есть локально
         updateMenuScores();
 
-        // 2. Фоном запускаем синхронизацию с облаком
+        // 2. Синхронизируем с облаком
         StorageManager.syncScores(() => {
-            // 3. Когда облако ответит, обновляем меню еще раз (если там были более новые данные)
+            // 3. Обновляем UI после синхронизации
             updateMenuScores();
         });
 
@@ -254,7 +334,6 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.game.classList.add('hidden');
         UI.overlay.classList.add('hidden');
         UI.menu.classList.remove('hidden');
-        // При возврате в меню снова обновляем рекорды
         updateMenuScores();
     }
 
@@ -312,8 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
     }
 
-    // === УПРАВЛЕНИЕ WASD (DESKTOP) ===
-
+    // === УПРАВЛЕНИЕ WASD ===
     function setupKeyboardScroll() {
         document.addEventListener('keydown', (e) => {
             if (UI.game.classList.contains('hidden')) return;
@@ -361,16 +439,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-
-    // === ОБРАБОТКА ВВОДА ЯЧЕЕК ===
-
+    // === MOUSE/TOUCH ===
     function handleMouse(e, cell) {
         if (state.over) return;
         if (e.button === 0) handleClick(cell);
         else if (e.button === 2) toggleFlag(cell);
     }
 
-    // --- Touch Logic ---
     function handleTouchStart(e, cell, el) {
         if (state.over) return;
         if (cell.isOpen && cell.val === 0) return;
@@ -416,7 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.touchStartPos = null;
     }
 
-    // === ДЕЙСТВИЯ ===
+    // === ACTIONS ===
     function handleClick(cell) {
         if (state.over || state.won || cell.isFlagged) return;
 
@@ -511,7 +586,7 @@ document.addEventListener('DOMContentLoaded', () => {
             UI.resultTitle.innerText = 'Победа!';
             haptic('success');
 
-            // Сохраняем точное время в миллисекундах
+            // Сохраняем результат
             let timeMs = Date.now() - state.startTime;
             if (state.mode !== 'custom') {
                 StorageManager.saveScore(state.mode, timeMs);
@@ -603,7 +678,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateMenuScores() {
         ['beginner', 'amateur', 'expert'].forEach(mode => {
             const el = document.getElementById(`score-${mode}`);
-            const bestTime = StorageManager.getBestTime(mode);
+            const bestTime = StorageManager.getLocalBest(mode);
             el.innerText = formatTime(bestTime);
         });
     }
