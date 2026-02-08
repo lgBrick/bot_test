@@ -1,71 +1,163 @@
 :root {
+    /* Переменные из Сапера */
     --bg-color: var(--tg-theme-bg-color, #ffffff);
+    --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f2f5);
     --text-color: var(--tg-theme-text-color, #000000);
-    --hint-color: var(--tg-theme-hint-color, #888888);
+    --hint-color: var(--tg-theme-hint-color, #8e8e93);
+    --link-color: var(--tg-theme-link-color, #007aff);
     --button-color: var(--tg-theme-button-color, #3390ec);
-    --button-text-color: var(--tg-theme-button-text-color, #ffffff);
-    --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    --button-text: var(--tg-theme-button-text-color, #ffffff);
 
-    /* Адаптивный размер сетки под ширину iframe */
-    --grid-size: 300px;
+    /* Параметры 2048 */
+    --grid-size: 300px; /* Базовый размер, будет пересчитан JS */
     --gap-size: 10px;
+    --cell-bg: rgba(120, 120, 128, 0.16);
 }
 
 body {
-    margin: 0;
-    padding: 20px 0;
+    margin: 0; padding: 0;
     background-color: var(--bg-color);
     color: var(--text-color);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Roboto, Helvetica, Arial, sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    height: 100vh; overflow: hidden;
+    touch-action: none;
+}
+
+.game-wrapper {
+    height: 100%; display: flex; flex-direction: column;
+}
+
+.hidden { display: none !important; }
+
+/* === МЕНЮ (Стили Сапера) === */
+#menu-screen {
+    padding: 20px;
+    height: 100%;
+    box-sizing: border-box;
+    background-color: var(--secondary-bg);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
-    user-select: none;
-    touch-action: none; /* Важно для свайпов */
 }
 
-/* --- Шапка --- */
-.header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: var(--grid-size);
-    margin-bottom: 15px;
+.menu-content { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.menu-footer { padding-top: 20px; text-align: center; margin-bottom: 20px; }
+
+.menu-header { text-align: center; margin-bottom: 30px; }
+h1 { margin: 0; font-size: 42px; font-weight: 800; color: var(--text-color); }
+.subtitle { margin: 5px 0 0; color: var(--button-color); font-weight: 600; font-size: 16px; }
+
+/* Список пресетов (используем для рекорда) */
+.presets-list {
+    background: var(--bg-color);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
-.title { font-size: 36px; font-weight: 800; color: var(--text-color); }
-.scores { display: flex; gap: 8px; }
+
+.preset-btn {
+    width: 100%;
+    background: var(--bg-color);
+    border: none;
+    padding: 16px 20px;
+    display: flex; justify-content: space-between; align-items: center;
+    text-align: left;
+}
+/* Класс для некликабельного элемента списка */
+.static-preset { pointer-events: none; }
+
+.preset-info { display: flex; flex-direction: column; gap: 4px; }
+.mode-title { font-size: 17px; font-weight: 600; color: var(--text-color); }
+.mode-desc { font-size: 13px; color: var(--hint-color); }
+.preset-score { text-align: right; }
+.score-label { display: block; font-size: 11px; color: var(--hint-color); text-transform: uppercase; font-weight: 700; }
+.score-val { font-family: monospace; font-size: 18px; color: var(--link-color); font-weight: 600; }
+
+/* Кнопки действий */
+.menu-buttons { display: flex; flex-direction: column; gap: 12px; }
+
+.action-btn {
+    width: 100%; padding: 16px;
+    background: var(--button-color); color: var(--button-text);
+    border: none; border-radius: 12px;
+    font-size: 17px; font-weight: 600; cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+    text-align: center;
+}
+.action-btn:active { transform: scale(0.98); opacity: 0.9; }
+
+/* Disabled состояние */
+.action-btn:disabled {
+    opacity: 0.5;
+    background-color: var(--hint-color); /* Или серый */
+    cursor: default;
+    pointer-events: none;
+}
+
+/* Второстепенная кнопка (Новая игра) - можно сделать чуть другим цветом, если нужно, но по референсу Сапера кнопки синие.
+   Оставим синим, но можно добавить .secondary-action { background: ... } если захочется. */
+
+.text-btn {
+    background: none; border: none; color: var(--link-color);
+    font-size: 15px; padding: 10px; cursor: pointer; font-weight: 500;
+}
+
+/* === ИГРА === */
+#game-screen {
+    background: var(--bg-color);
+    height: 100%;
+    display: flex; flex-direction: column;
+}
+
+.header {
+    padding: 10px 15px;
+    background: var(--bg-color);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.05);
+    display: flex; justify-content: space-between; align-items: center;
+    z-index: 10;
+    min-height: 50px;
+}
+
+.icon-btn {
+    background: none; border: none; padding: 8px;
+    color: var(--link-color); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+}
+.icon-btn:active { opacity: 0.6; }
+
+.scores { display: flex; gap: 10px; }
 .score-box {
     background-color: var(--secondary-bg);
-    padding: 5px 12px;
-    border-radius: 6px;
+    padding: 4px 12px;
+    border-radius: 8px;
     text-align: center;
-    min-width: 55px;
+    min-width: 60px;
 }
-.score-title { font-size: 10px; color: var(--hint-color); text-transform: uppercase; font-weight: bold; }
-.score-value { font-size: 16px; font-weight: bold; }
+.score-title { font-size: 10px; color: var(--hint-color); text-transform: uppercase; font-weight: 700; margin-bottom: 2px; }
+.score-value { font-size: 15px; font-weight: 700; color: var(--text-color); font-family: monospace; }
 
-.controls { width: var(--grid-size); display: flex; justify-content: flex-end; margin-bottom: 15px; }
-.new-game-btn {
-    background-color: var(--button-color);
-    color: var(--button-text-color);
-    border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
+/* Центрирование игры */
+.game-center-wrapper {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: var(--secondary-bg); /* Фон за полем, как в Сапере scroll-wrapper */
+    padding: 20px;
 }
 
-/* --- Поле --- */
 .game-container {
     width: var(--grid-size);
     height: var(--grid-size);
-    background-color: var(--secondary-bg);
-    border-radius: 8px;
+    background-color: rgba(128, 128, 128, 0.1); /* Легкая подложка */
+    border-radius: 12px;
     position: relative;
     padding: var(--gap-size);
     box-sizing: border-box;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
 }
 
 .grid-bg {
@@ -76,7 +168,10 @@ body {
     width: 100%; height: 100%;
 }
 
-.grid-cell { background-color: rgba(128, 128, 128, 0.15); border-radius: 4px; }
+.grid-cell {
+    background-color: var(--cell-bg);
+    border-radius: 6px;
+}
 
 .tile-container {
     position: absolute; top: 0; left: 0; right: 0; bottom: 0;
@@ -86,49 +181,21 @@ body {
 
 .tile {
     position: absolute;
-    /* Увеличиваем время до 100ms для плавности */
     transition: transform 100ms ease-in-out;
     z-index: 10;
 }
 
 .tile-inner {
     width: 100%; height: 100%;
-    border-radius: 4px;
+    border-radius: 6px;
     display: flex; justify-content: center; align-items: center;
     font-size: 26px; font-weight: bold;
     background-color: #eee4da; color: #000;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-/* --- Анимации (Новый код) --- */
-
-/* Появление новой плитки */
-@keyframes appear {
-    0% { opacity: 0; transform: scale(0); }
-    100% { opacity: 1; transform: scale(1); }
-}
-
-/* Слияние: начинается с нормального размера, увеличивается, возвращается */
-@keyframes pop {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.2); }
-    100% { transform: scale(1); }
-}
-
-.tile-new .tile-inner {
-    animation: appear 150ms ease-in-out backwards;
-}
-
-/* Обязательно добавляем z-index, чтобы анимация была поверх всего */
-.tile-merged {
-    z-index: 20;
-}
-
-.tile-merged .tile-inner {
-    animation: pop 150ms ease-in-out backwards;
-}
-
-/* Цвета */
-.tile-2 .tile-inner { background: #fff; color: #333; box-shadow: 0 0 2px rgba(0,0,0,0.1); }
+/* Цвета плиток (сохранены из оригинала для узнаваемости 2048) */
+.tile-2 .tile-inner { background: #fff; color: #333; }
 .tile-4 .tile-inner { background: #e3e8eb; color: #333; }
 .tile-8 .tile-inner { background: #b0c4de; color: #fff; }
 .tile-16 .tile-inner { background: #87b3d4; color: #fff; }
@@ -138,23 +205,39 @@ body {
 .tile-256 .tile-inner { background: #2a70b0; color: #fff; font-size: 22px; }
 .tile-512 .tile-inner { background: #1e60a7; color: #fff; font-size: 22px; }
 .tile-1024 .tile-inner { background: #14509e; color: #fff; font-size: 18px; }
-.tile-2048 .tile-inner { background: #0b4094; color: #fff; font-size: 18px; box-shadow: 0 0 10px #0b4094; }
+.tile-2048 .tile-inner { background: #0b4094; color: #fff; font-size: 18px; box-shadow: 0 0 15px #0b4094; }
 .tile-super .tile-inner { background: #000; color: #fff; font-size: 14px; }
 
-/* Game Over */
+/* Анимации */
+@keyframes appear {
+    0% { opacity: 0; transform: scale(0); }
+    100% { opacity: 1; transform: scale(1); }
+}
+@keyframes pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+.tile-new .tile-inner { animation: appear 150ms ease-in-out backwards; }
+.tile-merged { z-index: 20; }
+.tile-merged .tile-inner { animation: pop 150ms ease-in-out backwards; }
+
+/* Game Over Overlay */
 .game-over {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(255, 255, 255, 0.85);
     display: flex; flex-direction: column;
     justify-content: center; align-items: center;
-    border-radius: 8px; z-index: 100;
+    border-radius: 12px; z-index: 100;
     opacity: 0; pointer-events: none;
     transition: opacity 300ms ease;
 }
 .game-over.active { opacity: 1; pointer-events: auto; }
-.game-message { font-size: 28px; font-weight: bold; margin-bottom: 20px; color: #333; text-align: center; }
+.game-message { font-size: 28px; font-weight: 800; margin-bottom: 20px; color: var(--text-color); }
 
 @media (prefers-color-scheme: dark) {
     .game-over { background: rgba(0, 0, 0, 0.85); }
-    .game-message { color: #fff; }
+    .grid-cell { background-color: rgba(255, 255, 255, 0.1); }
+    .game-container { background-color: rgba(0,0,0,0.2); }
 }

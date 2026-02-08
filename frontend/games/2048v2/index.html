@@ -3,46 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2048</title>
-    <!-- Подключаем Telegram WebApp скрипт ОБЯЗАТЕЛЬНО -->
+    <title>2048 Telegram</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="game-wrapper">
-        <div class="header">
-            <div class="title">2048</div>
-            <div class="scores">
-                <div class="score-box">
-                    <div class="score-title">Счет</div>
-                    <div class="score-value" id="score">0</div>
+
+        <!-- === ГЛАВНОЕ МЕНЮ === -->
+        <div id="menu-screen">
+            <div class="menu-content">
+                <div class="menu-header">
+                    <h1>2048</h1>
+                    <p class="subtitle">Telegram Style</p>
                 </div>
-                <div class="score-box">
-                    <div class="score-title">Рекорд</div>
-                    <div class="score-value" id="best-score">0</div>
+
+                <!-- Блок рекорда (Стиль списка пресетов из Сапера) -->
+                <div class="presets-list">
+                    <div class="preset-btn static-preset">
+                        <div class="preset-info">
+                            <span class="mode-title">Личный рекорд</span>
+                            <span class="mode-desc">Ваш лучший результат</span>
+                        </div>
+                        <div class="preset-score">
+                            <span class="score-label">Лучшее:</span>
+                            <span class="score-val" id="menu-best-score">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Кнопки управления -->
+                <div class="menu-buttons">
+                    <button id="btn-continue" class="action-btn" disabled>Продолжить</button>
+                    <button id="btn-new-game" class="action-btn secondary-action">Новая игра</button>
+                </div>
+            </div>
+
+            <!-- Футер меню -->
+            <div class="menu-footer">
+                <button id="btn-help" class="text-btn help-trigger">Правила игры</button>
+            </div>
+        </div>
+
+        <!-- === ЭКРАН ИГРЫ === -->
+        <div id="game-screen" class="hidden">
+            <div class="header">
+                <button class="icon-btn" id="btn-back">
+                    <!-- Иконка назад как в Сапере -->
+                    <svg width="24" height="24" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+
+                <div class="scores">
+                    <div class="score-box">
+                        <div class="score-title">Счет</div>
+                        <div class="score-value" id="game-score">0</div>
+                    </div>
+                    <!-- Рекорд в игре (опционально, или можно убрать, оставив в меню) -->
+                    <div class="score-box">
+                        <div class="score-title">Рекорд</div>
+                        <div class="score-value" id="game-best-score">0</div>
+                    </div>
+                </div>
+
+                <!-- Пустой блок для баланса шапки или кнопка рестарта -->
+                <button class="icon-btn" id="btn-game-restart">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                </button>
+            </div>
+
+            <div class="game-center-wrapper">
+                <div class="game-container" id="game-container">
+                    <div class="grid-bg">
+                        <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+                        <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+                        <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+                        <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+                    </div>
+
+                    <div class="tile-container" id="tile-container"></div>
+
+                    <div class="game-over" id="game-over-screen">
+                        <div class="game-message" id="game-message">Игра окончена!</div>
+                        <button class="action-btn" id="btn-retry">Попробовать снова</button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="controls">
-            <button class="new-game-btn" id="restart-btn">Заново</button>
-        </div>
-
-        <div class="game-container" id="game-container">
-            <div class="grid-bg">
-                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
-                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
-                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
-                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
-            </div>
-
-            <div class="tile-container" id="tile-container"></div>
-
-            <div class="game-over" id="game-over-screen">
-                <div class="game-message" id="game-message">Game Over!</div>
-                <button class="new-game-btn" id="retry-btn">Еще раз</button>
-            </div>
-        </div>
     </div>
 
     <script src="script.js"></script>
