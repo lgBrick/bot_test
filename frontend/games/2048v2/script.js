@@ -22,8 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === КОНСТАНТЫ ===
     const KEYS = {
-        BEST_SCORE: '2048_tg_best_v2', // v2 чтобы не конфликтовать со старыми
-        GAME_STATE: '2048_tg_state_v2'
+        BEST_SCORE: '2048_best_score_v2', // v2 чтобы не конфликтовать со старыми
+        GAME_STATE: '2048_game_state_v2'
     };
 
     window.reset2048Progress = function(callback) {
