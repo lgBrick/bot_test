@@ -27,9 +27,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 icon: "https://cdn-icons-png.flaticon.com/128/1475/1475323.png",
                 url: "games/minesweeper/index.html",
                 storageKeys: [
-                    'minesweeper_best_beginner_v1',
-                    'minesweeper_best_amateur_v1',
-                    'minesweeper_best_expert_v1'
+                    'mines_best_beginner_v1',
+                    'mines_best_amateur_v1',
+                    'mines_best_expert_v1'
                 ]
             },
             {
