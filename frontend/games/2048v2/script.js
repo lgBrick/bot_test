@@ -26,6 +26,28 @@ document.addEventListener('DOMContentLoaded', () => {
         GAME_STATE: '2048_tg_state_v2'
     };
 
+    window.reset2048Progress = function(callback) {
+        console.log('[2048] Resetting progress...');
+
+        // 1. Очистка LocalStorage
+        localStorage.removeItem(KEYS.BEST_SCORE);
+        localStorage.removeItem(KEYS.GAME_STATE);
+
+        // 2. Очистка CloudStorage
+        if (cloudStorage) {
+            cloudStorage.removeItems([KEYS.BEST_SCORE, KEYS.GAME_STATE], (err) => {
+                if (err) console.error('Cloud clear error:', err);
+                if (callback) callback();
+            });
+        } else {
+            if (callback) callback();
+        }
+
+        // Обнуление UI если нужно (можно просто перезагрузить страницу)
+        const bestScoreEl = document.getElementById('menu-best-score');
+        if(bestScoreEl) bestScoreEl.innerText = '0';
+    };
+
     // === UI Elements ===
     const UI = {
         screens: {
@@ -336,12 +358,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setupInput() {
             document.addEventListener('keydown', e => {
-                if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
-                    e.preventDefault(); this.move(e.key);
+                // Карта клавиш: Стрелки + WASD (по физическому коду клавиши)
+                const map = {
+                    'ArrowUp': 'ArrowUp',    'KeyW': 'ArrowUp',
+                    'ArrowDown': 'ArrowDown',  'KeyS': 'ArrowDown',
+                    'ArrowLeft': 'ArrowLeft',  'KeyA': 'ArrowLeft',
+                    'ArrowRight': 'ArrowRight', 'KeyD': 'ArrowRight'
+                };
+
+                const direction = map[e.code]; // Используем e.code для независимости от раскладки
+
+                if (direction) {
+                    e.preventDefault();
+                    this.move(direction);
                 }
-                if (e.key.toLowerCase() === 'r') {
-                    // Быстрый рестарт по R
-                     this.startNew();
+
+                if (e.code === 'KeyR') {
+                    this.startNew();
                 }
             });
 

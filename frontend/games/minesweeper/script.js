@@ -66,6 +66,34 @@ document.addEventListener('DOMContentLoaded', () => {
         EXPERT: 'mines_best_expert_v1'
     };
 
+    window.resetMinesweeperProgress = function(callback) {
+        console.log('[Minesweeper] Resetting progress...');
+
+        const keysToRemove = Object.values(KEYS);
+
+        // 1. Очистка LocalStorage
+        keysToRemove.forEach(key => {
+            localStorage.removeItem(key);
+        });
+
+        // 2. Очистка CloudStorage
+        if (cloudStorage) {
+            cloudStorage.removeItems(keysToRemove, (err) => {
+                if (err) console.error('Cloud clear error:', err);
+                else console.log('Cloud data cleared');
+
+                if (callback) callback();
+            });
+        } else {
+            if (callback) callback();
+        }
+
+        // Обновляем UI, если мы находимся на экране меню
+        setTimeout(() => {
+            updateMenuScores();
+        }, 100);
+    };
+
     const StorageManager = {
         getKey(mode) {
             if (mode === 'beginner') return KEYS.BEGINNER;

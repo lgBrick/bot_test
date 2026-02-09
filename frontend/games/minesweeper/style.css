@@ -100,6 +100,15 @@ h1 { margin: 0; font-size: 32px; font-weight: 800; }
 }
 h3 { margin: 0 0 15px 0; font-size: 15px; text-transform: uppercase; color: var(--hint-color); font-weight: 700; letter-spacing: 0.5px;}
 
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type="number"] {
+    -moz-appearance: textfield; /* Для Firefox */
+}
+
 .inputs-row { display: flex; gap: 10px; margin-bottom: 20px; }
 
 /* Стили для групп инпутов */
@@ -131,10 +140,13 @@ input:focus { box-shadow: 0 0 0 2px var(--button-color); }
     font-size: 17px; padding: 12px; cursor: pointer; font-weight: 500;
 }
 
+/* Обновленный стиль кнопки помощи (как в 2048) */
 .help-trigger {
-    color: var(--hint-color);
+    color: var(--hint-color) !important;
     font-size: 14px;
     opacity: 0.8;
+    text-decoration: none;
+    font-weight: normal;
 }
 
 /* === ИГРА === */
