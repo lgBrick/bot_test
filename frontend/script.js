@@ -198,10 +198,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         // Основная логика удаления
+        // Основная логика удаления
         confirmResetBtn.addEventListener('click', () => {
             triggerHaptic('heavy');
 
-            // Получаем выбранные ID
             const selectedIds = Array.from(document.querySelectorAll('#reset-games-list input[type="checkbox"]:checked'))
                 .map(cb => parseInt(cb.value));
 
@@ -216,36 +216,48 @@ document.addEventListener("DOMContentLoaded", () => {
             // Массив промисов для отслеживания удаления из Cloud
             const cloudPromises = [];
 
+            // Собираем все ключи для удаления из Cloud в один список (оптимизация)
+            let allCloudKeysToRemove = [];
+
             selectedGames.forEach(game => {
                 if (game.storageKeys && game.storageKeys.length > 0) {
-                    // 1. Удаляем из LocalStorage браузера (удаляем каждый ключ)
+                    // 1. Удаляем из LocalStorage браузера
                     game.storageKeys.forEach(key => {
+                        console.log('Deleting Local:', key); // Лог для проверки
                         localStorage.removeItem(key);
                     });
 
-                    // 2. Удаляем из CloudStorage Телеграма (если доступен)
-                    if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
-                        const p = new Promise((resolve) => {
-                            // Используем removeItems (множественное число) для массива ключей
-                            tg.CloudStorage.removeItems(game.storageKeys, (err, result) => {
-                                if (err) {
-                                    console.error('Ошибка удаления из облака:', err);
-                                }
-                                resolve(); // Резолвим всегда, чтобы не блокировать интерфейс
-                            });
-                        });
-                        cloudPromises.push(p);
-                    }
+                    // Собираем ключи для облака
+                    allCloudKeysToRemove = allCloudKeysToRemove.concat(game.storageKeys);
                 }
             });
 
-            // Ждем завершения всех операций с облаком
+            // 2. Удаляем из CloudStorage одной пачкой (если есть ключи)
+            if (allCloudKeysToRemove.length > 0 && tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
+                const p = new Promise((resolve) => {
+                    tg.CloudStorage.removeItems(allCloudKeysToRemove, (err, result) => {
+                        if (err) {
+                            console.error('Ошибка Cloud:', err);
+                        } else {
+                            console.log('Cloud cleared:', allCloudKeysToRemove);
+                        }
+                        resolve();
+                    });
+                });
+                cloudPromises.push(p);
+            }
+
+            // Ждем завершения (или сразу закрываем, если облака нет)
             Promise.all(cloudPromises).then(() => {
                 tg.showAlert(`Прогресс сброшен для ${selectedGames.length} игр(ы).`);
 
-                // Снимаем галочки и закрываем
+                // Снимаем выделение и закрываем
                 deselectAllBtn.click();
                 resetModal.classList.add('hidden');
+
+                // ОПЦИОНАЛЬНО: Перезагрузить iframe игры, если она открыта,
+                // чтобы сброс применился визуально сразу, если вы находитесь внутри игры
+                // Но так как мы в меню, это не обязательно.
             });
         });
 
