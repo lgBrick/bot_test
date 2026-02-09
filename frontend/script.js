@@ -27,9 +27,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 icon: "https://cdn-icons-png.flaticon.com/128/1475/1475323.png",
                 url: "games/minesweeper/index.html",
                 storageKeys: [
-                    'minesweeper_best_beginner',
-                    'minesweeper_best_amateur',
-                    'minesweeper_best_expert'
+                    'minesweeper_best_beginner_v1',
+                    'minesweeper_best_amateur_v1',
+                    'minesweeper_best_expert_v1'
                 ]
             },
             {
@@ -39,7 +39,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/2048_logo.svg/1200px-2048_logo.svg.png",
                 url: "games/2048v2/index.html",
                 // Здесь указываем ключи, которые мы прописали в коде самой игры
-                storageKeys: ['2048_best_score_v1', '2048_game_state_v1']
+                storageKeys: ['2048_best_score_v2', '2048_game_state_v2']
             }
         ];
 
@@ -201,6 +201,7 @@ document.addEventListener("DOMContentLoaded", () => {
         confirmResetBtn.addEventListener('click', () => {
             triggerHaptic('heavy');
 
+            // Получаем выбранные ID
             const selectedIds = Array.from(document.querySelectorAll('#reset-games-list input[type="checkbox"]:checked'))
                 .map(cb => parseInt(cb.value));
 
@@ -216,28 +217,34 @@ document.addEventListener("DOMContentLoaded", () => {
             const cloudPromises = [];
 
             selectedGames.forEach(game => {
-                if (game.storageKeys) {
+                if (game.storageKeys && game.storageKeys.length > 0) {
+                    // 1. Удаляем из LocalStorage браузера (удаляем каждый ключ)
                     game.storageKeys.forEach(key => {
-                        // 1. Удаляем из LocalStorage браузера
                         localStorage.removeItem(key);
-
-                        // 2. Удаляем из CloudStorage Телеграма (если доступен)
-                        if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
-                            const p = new Promise((resolve) => {
-                                tg.CloudStorage.removeItem(key, (err, result) => {
-                                    // Игнорируем ошибки, просто резолвим, чтобы не висеть
-                                    resolve();
-                                });
-                            });
-                            cloudPromises.push(p);
-                        }
                     });
+
+                    // 2. Удаляем из CloudStorage Телеграма (если доступен)
+                    if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
+                        const p = new Promise((resolve) => {
+                            // Используем removeItems (множественное число) для массива ключей
+                            tg.CloudStorage.removeItems(game.storageKeys, (err, result) => {
+                                if (err) {
+                                    console.error('Ошибка удаления из облака:', err);
+                                }
+                                resolve(); // Резолвим всегда, чтобы не блокировать интерфейс
+                            });
+                        });
+                        cloudPromises.push(p);
+                    }
                 }
             });
 
-            // Ждем завершения всех операций с облаком (или сразу закрываем, если нет облака)
+            // Ждем завершения всех операций с облаком
             Promise.all(cloudPromises).then(() => {
                 tg.showAlert(`Прогресс сброшен для ${selectedGames.length} игр(ы).`);
+
+                // Снимаем галочки и закрываем
+                deselectAllBtn.click();
                 resetModal.classList.add('hidden');
             });
         });
