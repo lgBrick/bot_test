@@ -18,7 +18,7 @@
                     <p class="subtitle">Telegram Style</p>
                 </div>
 
-                <!-- Блок рекорда (Стиль списка пресетов из Сапера) -->
+                <!-- Блок рекорда -->
                 <div class="presets-list">
                     <div class="preset-btn static-preset">
                         <div class="preset-info">
@@ -27,7 +27,7 @@
                         </div>
                         <div class="preset-score">
                             <span class="score-label">Лучшее:</span>
-                            <span class="score-val" id="menu-best-score">0</span>
+                            <span class="score-val" id="menu-best-score">Загрузка...</span>
                         </div>
                     </div>
                 </div>
@@ -41,7 +41,7 @@
 
             <!-- Футер меню -->
             <div class="menu-footer">
-                <button id="btn-help" class="text-btn help-trigger">Правила игры</button>
+                <button id="btn-help" class="text-btn help-trigger">Помощь / Правила</button>
             </div>
         </div>
 
@@ -49,7 +49,6 @@
         <div id="game-screen" class="hidden">
             <div class="header">
                 <button class="icon-btn" id="btn-back">
-                    <!-- Иконка назад как в Сапере -->
                     <svg width="24" height="24" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                 </button>
 
@@ -58,14 +57,13 @@
                         <div class="score-title">Счет</div>
                         <div class="score-value" id="game-score">0</div>
                     </div>
-                    <!-- Рекорд в игре (опционально, или можно убрать, оставив в меню) -->
                     <div class="score-box">
                         <div class="score-title">Рекорд</div>
                         <div class="score-value" id="game-best-score">0</div>
                     </div>
                 </div>
 
-                <!-- Пустой блок для баланса шапки или кнопка рестарта -->
+                <!-- Кнопка рестарта -->
                 <button class="icon-btn" id="btn-game-restart">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
                 </button>
@@ -74,6 +72,7 @@
             <div class="game-center-wrapper">
                 <div class="game-container" id="game-container">
                     <div class="grid-bg">
+                        <!-- 16 ячеек фона -->
                         <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
                         <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
                         <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
@@ -87,6 +86,38 @@
                         <button class="action-btn" id="btn-retry">Попробовать снова</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- === ЭКРАН ПОМОЩИ (OVERLAY) === -->
+        <div id="help-overlay" class="overlay hidden">
+            <div class="overlay-content help-content">
+                <h2>Как играть</h2>
+
+                <div class="help-section">
+                    <p>🎯 <strong>Цель:</strong> Собрать плитку <strong>2048</strong>.</p>
+                    <p>➕ <strong>Слияние:</strong> Плитки с одинаковым числом сливаются в одну при столкновении.</p>
+                </div>
+
+                <div class="help-divider"></div>
+
+                <div class="help-section">
+                    <h3>📱 Управление</h3>
+                    <ul class="control-list">
+                        <li><strong>Свайп:</strong> Перемещение плиток</li>
+                        <li><strong>Кнопка 🔄:</strong> Перезапуск игры</li>
+                    </ul>
+                </div>
+
+                <div class="help-section">
+                    <h3>💻 Компьютер</h3>
+                    <ul class="control-list">
+                        <li><strong>Стрелки:</strong> Перемещение</li>
+                        <li><strong>R:</strong> Быстрый рестарт</li>
+                    </ul>
+                </div>
+
+                <button id="help-close-btn" class="action-btn">Понятно</button>
             </div>
         </div>
 

@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     // === ИНИЦИАЛИЗАЦИЯ TELEGRAM SDK ===
     let tg = window.Telegram.WebApp;
+    let cloudStorage = null;
+
     try {
         if (window.parent && window.parent.Telegram && window.parent.Telegram.WebApp) {
             tg = window.parent.Telegram.WebApp;
@@ -8,6 +10,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tg) {
             tg.ready();
             tg.expand();
+            // Проверка CloudStorage
+            if (tg.CloudStorage && tg.isVersionAtLeast('6.9')) {
+                cloudStorage = tg.CloudStorage;
+                console.log('CloudStorage: Available');
+            }
         }
     } catch (e) {
         console.log('TG Init Error:', e);
@@ -15,8 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === КОНСТАНТЫ ===
     const KEYS = {
-        BEST_SCORE: '2048_tg_best_v1',
-        GAME_STATE: '2048_tg_state_v1'
+        BEST_SCORE: '2048_tg_best_v2', // v2 чтобы не конфликтовать со старыми
+        GAME_STATE: '2048_tg_state_v2'
     };
 
     // === UI Elements ===
@@ -41,17 +48,64 @@ document.addEventListener('DOMContentLoaded', () => {
             btnBack: document.getElementById('btn-back'),
             btnRestart: document.getElementById('btn-game-restart'),
             btnRetry: document.getElementById('btn-retry')
+        },
+        help: {
+            overlay: document.getElementById('help-overlay'),
+            closeBtn: document.getElementById('help-close-btn')
         }
     };
 
-    // === STORAGE MANAGER ===
+    // === STORAGE MANAGER (С ОБЛАКОМ) ===
     const StorageManager = {
-        getBestScore() {
+        // Получить локальный рекорд
+        getLocalBest() {
             return parseInt(localStorage.getItem(KEYS.BEST_SCORE)) || 0;
         },
+
+        // Сохранить рекорд (Локально + Облако)
         setBestScore(score) {
-            localStorage.setItem(KEYS.BEST_SCORE, score);
+            const current = this.getLocalBest();
+            if (score > current) {
+                // 1. Локально
+                localStorage.setItem(KEYS.BEST_SCORE, score);
+
+                // 2. Облако
+                if (cloudStorage) {
+                    cloudStorage.setItem(KEYS.BEST_SCORE, score.toString(), (err) => {
+                        if(!err) console.log('Cloud Saved:', score);
+                    });
+                }
+            }
         },
+
+        // Синхронизация при старте
+        sync(callback) {
+            const local = this.getLocalBest();
+            // Сразу показываем локальный
+            if(callback) callback(local);
+
+            if (cloudStorage) {
+                cloudStorage.getItem(KEYS.BEST_SCORE, (err, val) => {
+                    if (!err && val) {
+                        const cloudVal = parseInt(val);
+                        console.log(`Sync: Local=${local}, Cloud=${cloudVal}`);
+
+                        if (cloudVal > local) {
+                            // Облако круче -> обновляем локалку
+                            localStorage.setItem(KEYS.BEST_SCORE, cloudVal);
+                            if(callback) callback(cloudVal);
+                        } else if (local > cloudVal) {
+                            // Локалка круче -> пушим в облако
+                            cloudStorage.setItem(KEYS.BEST_SCORE, local.toString());
+                        }
+                    } else if (!err && !val && local > 0) {
+                         // В облаке пусто, а локально есть -> пушим
+                         cloudStorage.setItem(KEYS.BEST_SCORE, local.toString());
+                    }
+                });
+            }
+        },
+
         getState() {
             try {
                 const s = localStorage.getItem(KEYS.GAME_STATE);
@@ -112,12 +166,10 @@ document.addEventListener('DOMContentLoaded', () => {
             this.gridSize = 4;
             this.tiles = [];
             this.score = 0;
-            this.bestScore = 0;
             this.gap = 10;
             this.cellSize = 0;
             this.isAnimating = false;
 
-            // Биндинг событий
             this.resize();
             window.addEventListener('resize', () => this.handleResize());
             this.setupInput();
@@ -132,18 +184,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         resize() {
-            // Расчет размера сетки относительно ширины экрана, но не больше 400px
-            const containerWidth = Math.min(window.innerWidth - 40, 400); // 40px padding
+            const containerWidth = Math.min(window.innerWidth - 40, 400);
             UI.game.container.style.width = `${containerWidth}px`;
             UI.game.container.style.height = `${containerWidth}px`;
-
-            // Обновляем CSS переменную для ширины шапки
             document.documentElement.style.setProperty('--grid-size', `${containerWidth}px`);
-
             this.cellSize = (containerWidth - (this.gap * 2) - (this.gap * (this.gridSize - 1))) / this.gridSize;
         }
-
-        // --- Логика Запуска ---
 
         startNew() {
             StorageManager.clearState();
@@ -164,19 +210,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.startNew();
                 return;
             }
-
             this.score = saved.score;
             this.tiles = [];
             UI.game.tileContainer.innerHTML = '';
             UI.game.gameOver.classList.remove('active');
-
             saved.tiles.forEach(t => {
                 this.tiles.push(new Tile(UI.game.tileContainer, t.value, t.x, t.y, this.cellSize, this.gap, true));
             });
             this.updateScoreUI();
         }
-
-        // --- Игровая Механика ---
 
         addTile() {
             if(this.tiles.length >= 16) return;
@@ -193,6 +235,8 @@ document.addEventListener('DOMContentLoaded', () => {
         move(dir) {
             if (UI.screens.game.classList.contains('hidden') ||
                 UI.game.gameOver.classList.contains('active') ||
+                UI.help.overlay.classList.contains('active') || // Блок если открыта помощь
+                !UI.help.overlay.classList.contains('hidden') ||
                 this.isAnimating) return;
 
             const vecs = { 'ArrowUp':{x:0,y:-1}, 'ArrowDown':{x:0,y:1}, 'ArrowLeft':{x:-1,y:0}, 'ArrowRight':{x:1,y:0} };
@@ -200,11 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if(!v) return;
 
             let moved = false;
-
-            this.tiles.forEach(t => {
-                t.mergedFrom = null;
-                t.element.classList.remove('tile-merged');
-            });
+            this.tiles.forEach(t => { t.mergedFrom = null; t.element.classList.remove('tile-merged'); });
 
             const xs = v.x===1?[3,2,1,0]:[0,1,2,3];
             const ys = v.y===1?[3,2,1,0]:[0,1,2,3];
@@ -216,20 +256,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     while(true) {
                         next = {x:cell.x+v.x, y:cell.y+v.y};
                         if(next.x<0||next.x>3||next.y<0||next.y>3) break;
-
                         const other = this.tiles.find(o => o.x===next.x && o.y===next.y && !o.mergedToRemove);
                         if(other) {
                             if(other.value===t.value && !other.mergedFrom) {
                                 const merged = new Tile(UI.game.tileContainer, t.value*2, next.x, next.y, this.cellSize, this.gap, false, true);
                                 merged.element.style.opacity = '0';
                                 merged.mergedFrom = true;
-
                                 t.mergedToRemove = true;
                                 other.mergedToRemove = true;
                                 t.element.style.zIndex = 100;
                                 t.x = next.x; t.y = next.y;
                                 t.updatePosition();
-
                                 this.tiles.push(merged);
                                 this.score += merged.value;
                                 moved = true;
@@ -246,12 +283,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if(moved) {
                 this.isAnimating = true;
-                this.updateScoreUI(); // Обновляем счет сразу
-
+                this.updateScoreUI();
                 setTimeout(() => {
                     this.tiles.forEach(t => { if(t.mergedToRemove) t.remove() });
                     this.tiles = this.tiles.filter(t => !t.mergedToRemove);
-
                     this.tiles.forEach(t => {
                         if (t.mergedFrom) {
                             t.element.style.opacity = '1';
@@ -259,14 +294,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             t.element.classList.add('tile-merged');
                         }
                     });
-
                     this.addTile();
                     this.save();
                     this.isAnimating = false;
-
-                    if(!this.movesAvailable()) {
-                        this.gameOver();
-                    }
+                    if(!this.movesAvailable()) this.gameOver();
                 }, 100);
             }
         }
@@ -285,21 +316,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         updateScoreUI() {
             UI.game.score.innerText = this.score;
-            // Проверка рекорда на лету
-            const currentBest = StorageManager.getBestScore();
-            if (this.score > currentBest) {
-                StorageManager.setBestScore(this.score);
-                UI.game.bestScore.innerText = this.score;
-            } else {
-                UI.game.bestScore.innerText = currentBest;
-            }
+            StorageManager.setBestScore(this.score);
+            UI.game.bestScore.innerText = Math.max(this.score, StorageManager.getLocalBest());
         }
 
         save() {
-            if (this.score > StorageManager.getBestScore()) {
-                StorageManager.setBestScore(this.score);
-            }
-
             StorageManager.saveState({
                 score: this.score,
                 tiles: this.tiles.map(t => t.serialize())
@@ -310,8 +331,6 @@ document.addEventListener('DOMContentLoaded', () => {
             UI.game.msg.innerHTML = `Игра окончена!<br>Счет: ${this.score}`;
             UI.game.gameOver.classList.add('active');
             StorageManager.clearState();
-
-            // Вибрация при проигрыше
             if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
         }
 
@@ -319,6 +338,10 @@ document.addEventListener('DOMContentLoaded', () => {
             document.addEventListener('keydown', e => {
                 if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
                     e.preventDefault(); this.move(e.key);
+                }
+                if (e.key.toLowerCase() === 'r') {
+                    // Быстрый рестарт по R
+                     this.startNew();
                 }
             });
 
@@ -338,38 +361,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // === КОНТРОЛЛЕР ПРИЛОЖЕНИЯ ===
+    // === КОНТРОЛЛЕР ===
     const game = new Game2048();
+
+    function updateMenuBestScore() {
+        // Запускаем синхронизацию и обновляем UI
+        StorageManager.sync((val) => {
+            UI.menu.bestScore.innerText = val;
+            UI.game.bestScore.innerText = val;
+        });
+    }
 
     function showMenu() {
         UI.screens.game.classList.add('hidden');
         UI.screens.menu.classList.remove('hidden');
-
-        // Обновляем данные в меню
-        const best = StorageManager.getBestScore();
-        UI.menu.bestScore.innerText = best;
-
-        // Проверяем наличие сохранения для кнопки "Продолжить"
+        updateMenuBestScore();
         const state = StorageManager.getState();
-        if (state) {
-            UI.menu.btnContinue.disabled = false;
-        } else {
-            UI.menu.btnContinue.disabled = true;
-        }
+        UI.menu.btnContinue.disabled = !state;
     }
 
     function showGame(isNew) {
         UI.screens.menu.classList.add('hidden');
         UI.screens.game.classList.remove('hidden');
-
-        // Важно: пересчитать размер при показе, так как контейнер был скрыт
         game.resize();
-
-        if (isNew) {
-            game.startNew();
-        } else {
-            game.restore();
-        }
+        if (isNew) game.startNew();
+        else game.restore();
     }
 
     // Обработчики кнопок
@@ -383,11 +399,18 @@ document.addEventListener('DOMContentLoaded', () => {
         showGame(false);
     });
 
+    // HELP LOGIC
     UI.menu.btnHelp.addEventListener('click', () => {
         if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-        tg.showAlert('Цель игры: собрать плитку 2048.\n\nСвайпайте (или используйте стрелки) чтобы перемещать плитки. Плитки с одинаковым номиналом сливаются в одну!');
+        UI.help.overlay.classList.remove('hidden');
     });
 
+    UI.help.closeBtn.addEventListener('click', () => {
+        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        UI.help.overlay.classList.add('hidden');
+    });
+
+    // Кнопки в игре
     UI.game.btnBack.addEventListener('click', () => {
         if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         showMenu();
@@ -395,9 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     UI.game.btnRestart.addEventListener('click', () => {
         if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-        tg.showConfirm('Начать новую игру?', (ok) => {
-            if(ok) game.startNew();
-        });
+        tg.showConfirm('Начать новую игру?', (ok) => { if(ok) game.startNew(); });
     });
 
     UI.game.btnRetry.addEventListener('click', () => {
